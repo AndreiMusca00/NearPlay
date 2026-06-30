@@ -1,114 +1,194 @@
-//
-//  NearbyService.swift
-//  NearPlay
-//
-//  Created by Andrei Musca on 30/06/2026.
-//
-
-import Foundation
 import MultipeerConnectivity
 import Combine
 
-/// Generic, reusable nearby connectivity service.
-/// This first version sets up core properties and lifecycle without full invite/browse/advertise logic.
-final class NearbyService: NSObject, ObservableObject {
-    // MARK: - Published state
-    @Published private(set) var connectionState: NearbyConnectionState = .idle
-    @Published private(set) var discoveredPeers: [NearbyPeer] = []
-    @Published private(set) var connectedPeers: [NearbyPeer] = []
-    @Published private(set) var pendingInvitation: NearbyInvitation?
-    @Published private(set) var lastReceivedMessage: NearbyMessage?
-    @Published private(set) var errorMessage: String?
+final class NearbyService: NSObject, ObservableObject, MCSessionDelegate {
+    enum ConnectionState {
+        case idle
+        case searching
+        case connecting
+        case connected
+    }
 
-    // MARK: - Configuration
+    @Published var connectionState: ConnectionState = .idle
+    @Published var discoveredPeers: [NearbyPeer] = []
+    @Published var connectedPeers: [NearbyPeer] = []
+    @Published var errorMessage: String?
+
     private let serviceType = "nearplay"
-    private var currentGameID: String?
-    private var currentPlayerName: String = ""
-    private var currentMaxPlayers: Int = 2
-
-    // MARK: - Multipeer components
-    private var myPeerID: MCPeerID?
-    private var session: MCSession?
+    private var peerID: MCPeerID!
+    private var session: MCSession!
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
 
-    // MARK: - Public API
+    private var currentGameID: String?
+
     func start(gameID: String, playerName: String, maxPlayers: Int) {
-        // Reset any existing state
-        stop()
+        peerID = MCPeerID(displayName: playerName)
+        session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
+        session.delegate = self
 
-        // Store configuration
         currentGameID = gameID
-        currentPlayerName = playerName
-        currentMaxPlayers = maxPlayers
 
-        // Initialize peer and session
-        let peerID = MCPeerID(displayName: playerName)
-        myPeerID = peerID
-        let session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
-        // Delegates will be set up in a later step
-        self.session = session
+        let discoveryInfo: [String: String] = [
+            "gameID": gameID,
+            "playerName": playerName,
+            "maxPlayers": String(maxPlayers)
+        ]
 
-        // TODO: In a later step, set up advertiser and browser with discoveryInfo and delegates
-        // advertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: nil, serviceType: serviceType)
-        // browser = MCNearbyServiceBrowser(peer: peerID, serviceType: serviceType)
+        let advertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: discoveryInfo, serviceType: serviceType)
+        advertiser.delegate = self
+        self.advertiser = advertiser
 
-        // Move to a searching state for now (placeholder)
+        let browser = MCNearbyServiceBrowser(peer: peerID, serviceType: serviceType)
+        browser.delegate = self
+        self.browser = browser
+
+        advertiser.startAdvertisingPeer()
+        browser.startBrowsingForPeers()
+
         publishOnMain { self.connectionState = .searching }
     }
 
     func stop() {
-        // Disconnect and clean up
         advertiser?.stopAdvertisingPeer()
         browser?.stopBrowsingForPeers()
-        session?.disconnect()
 
         advertiser = nil
         browser = nil
+        session.disconnect()
         session = nil
-        myPeerID = nil
+        peerID = nil
         currentGameID = nil
-        currentPlayerName = ""
-        currentMaxPlayers = 2
 
         publishOnMain {
             self.connectionState = .idle
-            self.discoveredPeers = []
-            self.connectedPeers = []
-            self.pendingInvitation = nil
-            self.lastReceivedMessage = nil
+            self.discoveredPeers.removeAll()
+            self.connectedPeers.removeAll()
             self.errorMessage = nil
         }
     }
 
-    func invite(_ peer: NearbyPeer) {
-        // TODO: Implement invite flow in a later step
-        // For now, set state to inviting as a placeholder
-        publishOnMain { self.connectionState = .inviting }
-    }
+    // Helpers
 
-    func acceptInvitation() {
-        // TODO: Implement accept flow in a later step
-        publishOnMain { self.pendingInvitation = nil }
-    }
-
-    func rejectInvitation() {
-        // TODO: Implement reject flow in a later step
-        publishOnMain { self.pendingInvitation = nil }
-    }
-
-    func send(_ message: NearbyMessage) {
-        // TODO: Implement broadcast send in a later step
-        // Placeholder: no-op
-    }
-
-    func send(_ message: NearbyMessage, to peers: [NearbyPeer]) {
-        // TODO: Implement targeted send in a later step
-        // Placeholder: no-op
-    }
-
-    // MARK: - Helpers
     private func publishOnMain(_ block: @escaping () -> Void) {
-        if Thread.isMainThread { block() } else { DispatchQueue.main.async(execute: block) }
+        if Thread.isMainThread {
+            block()
+        } else {
+            DispatchQueue.main.async {
+                block()
+            }
+        }
     }
+
+    private func upsertDiscoveredPeer(_ peerID: MCPeerID, info: [String: String]?) {
+        guard let currentGameID = currentGameID else { return }
+        // Only peers advertising the same gameID should appear
+        guard info?["gameID"] == currentGameID else { return }
+        let peer = NearbyPeer(id: peerID.displayName, displayName: peerID.displayName, gameID: info?["gameID"], maxPlayers: Int(info?["maxPlayers"] ?? ""))
+        publishOnMain {
+            if !self.discoveredPeers.contains(peer) && !self.connectedPeers.contains(peer) {
+                self.discoveredPeers.append(peer)
+            }
+        }
+    }
+
+    private func removeDiscoveredPeer(_ peerID: MCPeerID) {
+        let peer = NearbyPeer(id: peerID.displayName, displayName: peerID.displayName)
+        publishOnMain {
+            self.discoveredPeers.removeAll { $0.id == peer.id }
+        }
+    }
+}
+
+// MARK: - MCNearbyServiceBrowserDelegate
+extension NearbyService: MCNearbyServiceBrowserDelegate {
+    func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String : String]?) {
+        upsertDiscoveredPeer(peerID, info: info)
+    }
+
+    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
+        removeDiscoveredPeer(peerID)
+    }
+
+    func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
+        publishOnMain { self.errorMessage = "Browser failed: \(error.localizedDescription)" }
+    }
+}
+
+// MARK: - MCNearbyServiceAdvertiserDelegate
+extension NearbyService: MCNearbyServiceAdvertiserDelegate {
+    func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
+        publishOnMain { self.errorMessage = "Advertiser failed: \(error.localizedDescription)" }
+    }
+
+    func advertiser(_ advertiser: MCNearbyServiceAdvertiser,
+                    didReceiveInvitationFromPeer peerID: MCPeerID,
+                    withContext context: Data?,
+                    invitationHandler: @escaping (Bool, MCSession?) -> Void) {
+        // Optionally validate the invitation context or peer. For now, accept if we have a session and gameID.
+        guard self.session != nil else {
+            invitationHandler(false, nil)
+            return
+        }
+
+        // If discovery info included a gameID, it's not available here directly; you could encode it in context.
+        // For now, accept all invitations and rely on filtering during discovery.
+        invitationHandler(true, self.session)
+    }
+}
+
+// MARK: - MCSessionDelegate
+extension NearbyService {
+    func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+        let peer = NearbyPeer(id: peerID.displayName, displayName: peerID.displayName)
+        switch state {
+        case .connected:
+            publishOnMain {
+                // Move from discovered to connected
+                self.discoveredPeers.removeAll { $0.id == peer.id }
+                if !self.connectedPeers.contains(peer) {
+                    self.connectedPeers.append(peer)
+                }
+                self.connectionState = .connected
+            }
+        case .connecting:
+            publishOnMain {
+                self.connectionState = .connecting
+            }
+        case .notConnected:
+            publishOnMain {
+                // Remove from connected; may reappear via discovery
+                self.connectedPeers.removeAll { $0.id == peer.id }
+                if self.connectedPeers.isEmpty {
+                    // If we were connected and lost all peers, return to searching if browser is running
+                    if self.browser != nil { self.connectionState = .searching } else { self.connectionState = .idle }
+                }
+            }
+        @unknown default:
+            break
+        }
+    }
+
+    func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        // Handle incoming data if needed. For now, no-op.
+    }
+
+    func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {
+        // Not used in this app.
+    }
+
+    func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
+        // Not used in this app.
+    }
+
+    func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
+        // Not used in this app.
+    }
+
+    #if os(iOS) || os(tvOS)
+    func session(_ session: MCSession, didReceiveCertificate certificate: [Any]?, fromPeer peerID: MCPeerID, certificateHandler: @escaping (Bool) -> Void) {
+        // Accept all peers by default; in production, validate as needed.
+        certificateHandler(true)
+    }
+    #endif
 }
