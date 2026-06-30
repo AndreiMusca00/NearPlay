@@ -20,6 +20,9 @@ final class NearbyService: NSObject, ObservableObject, MCSessionDelegate {
     @Published var connectedPeers: [NearbyPeer] = []
     @Published var errorMessage: String?
     
+    // Latest received message
+    @Published var lastReceivedMessage: NearbyMessage?
+    
     // Pending invitation information for UI to observe
     @Published var pendingInvitation: (from: NearbyPeer, context: InvitationContext)?
 
@@ -77,6 +80,36 @@ final class NearbyService: NSObject, ObservableObject, MCSessionDelegate {
             self.discoveredPeers.removeAll()
             self.connectedPeers.removeAll()
             self.errorMessage = nil
+        }
+    }
+    
+    // MARK: - Messaging
+    /// Send a NearbyMessage to all connected peers.
+    func send(_ message: NearbyMessage) {
+        send(message, to: connectedPeers)
+    }
+
+    /// Send a NearbyMessage to a subset of peers.
+    func send(_ message: NearbyMessage, to peers: [NearbyPeer]) {
+        guard let session = session else { return }
+        do {
+            let data = try JSONEncoder().encode(message)
+            // Determine target MCPeerIDs
+            let targetPeerIDs: [MCPeerID]
+            if peers.isEmpty {
+                targetPeerIDs = session.connectedPeers
+            } else {
+                targetPeerIDs = session.connectedPeers.filter { peer in peers.contains(where: { $0.displayName == peer.displayName }) }
+            }
+            for peer in targetPeerIDs {
+                do {
+                    try session.send(data, toPeers: [peer], with: .reliable)
+                } catch {
+                    publishOnMain { self.errorMessage = "Send failed to \(peer.displayName): \(error.localizedDescription)" }
+                }
+            }
+        } catch {
+            publishOnMain { self.errorMessage = "Encoding message failed: \(error.localizedDescription)" }
         }
     }
     
@@ -227,7 +260,16 @@ extension NearbyService {
     }
 
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        // Handle incoming data if needed. For now, no-op.
+        do {
+            let message = try JSONDecoder().decode(NearbyMessage.self, from: data)
+            publishOnMain {
+                self.lastReceivedMessage = message
+            }
+        } catch {
+            publishOnMain {
+                self.errorMessage = "Failed to decode message from \(peerID.displayName): \(error.localizedDescription)"
+            }
+        }
     }
 
     func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {
