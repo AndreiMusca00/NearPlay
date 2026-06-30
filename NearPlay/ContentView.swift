@@ -9,13 +9,25 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        OfflineGamesRootView()
-            .withPlayerNameStorage()
+        NavigationStack {
+            List(Game.all) { game in
+                NavigationLink(value: game) {
+                    VStack(alignment: .leading) {
+                        Text(game.title).font(.headline)
+                        Text("Players: \(game.minPlayers)-\(game.maxPlayers)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationDestination(for: Game.self) { game in
+                GameLobbyView(game: game)
+            }
+            .navigationTitle("NearPlay")
+        }
     }
 }
 
 #Preview {
-    OfflineGamesRootView()
-        .withPlayerNameStorage()
+    ContentView()
 }
-
