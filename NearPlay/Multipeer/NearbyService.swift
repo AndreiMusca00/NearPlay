@@ -1,6 +1,12 @@
 import MultipeerConnectivity
 import Combine
 
+struct InvitationContext: Codable {
+    let gameID: String
+    let playerName: String
+    let maxPlayers: Int
+}
+
 final class NearbyService: NSObject, ObservableObject, MCSessionDelegate {
     enum ConnectionState {
         case idle
@@ -13,6 +19,12 @@ final class NearbyService: NSObject, ObservableObject, MCSessionDelegate {
     @Published var discoveredPeers: [NearbyPeer] = []
     @Published var connectedPeers: [NearbyPeer] = []
     @Published var errorMessage: String?
+    
+    // Pending invitation information for UI to observe
+    @Published var pendingInvitation: (from: NearbyPeer, context: InvitationContext)?
+
+    // Stored invitation handler until user accepts or rejects
+    private var storedInvitationHandler: ((Bool, MCSession?) -> Void)?
 
     private let serviceType = "nearplay"
     private var peerID: MCPeerID!
@@ -67,6 +79,38 @@ final class NearbyService: NSObject, ObservableObject, MCSessionDelegate {
             self.errorMessage = nil
         }
     }
+    
+    /// Invite a discovered peer to join using the browser. The invitation carries a Codable context.
+    func invite(_ peer: NearbyPeer, timeout: TimeInterval = 30) {
+        guard let browser = browser, let session = session, let currentGameID = currentGameID else { return }
+        // Build context
+        let context = InvitationContext(gameID: currentGameID, playerName: peerID.displayName, maxPlayers: computeMaxPlayers())
+        let encoder = JSONEncoder()
+        let contextData = try? encoder.encode(context)
+        // Find the MCPeerID in discovered list by matching displayName
+        let targetPeerID = MCPeerID(displayName: peer.displayName)
+        browser.invitePeer(targetPeerID, to: session, withContext: contextData, timeout: timeout)
+        publishOnMain { self.connectionState = .connecting }
+    }
+    
+    /// Accept the currently pending invitation if any.
+    func acceptInvitation() {
+        guard let handler = storedInvitationHandler else { return }
+        storedInvitationHandler = nil
+        publishOnMain { self.pendingInvitation = nil }
+        handler(true, self.session)
+        publishOnMain { self.connectionState = .connecting }
+    }
+
+    /// Reject the currently pending invitation if any.
+    func rejectInvitation() {
+        guard let handler = storedInvitationHandler else { return }
+        storedInvitationHandler = nil
+        publishOnMain { self.pendingInvitation = nil }
+        handler(false, nil)
+        // Return to searching if appropriate
+        publishOnMain { self.connectionState = (self.browser != nil) ? .searching : .idle }
+    }
 
     // Helpers
 
@@ -78,6 +122,15 @@ final class NearbyService: NSObject, ObservableObject, MCSessionDelegate {
                 block()
             }
         }
+    }
+    
+    // Determines the desired max players for the current session (between 2 and 6). Uses discovery info if available; defaults to 2.
+    private func computeMaxPlayers() -> Int {
+        // We don't persist maxPlayers separately; callers provide it at start(). Keep within 2...6.
+        // Try to derive from discovered peers if any matching gameID, else default to 2.
+        let advertised = discoveredPeers.compactMap { $0.maxPlayers }.first
+        let value = advertised ?? 2
+        return min(max(value, 2), 6)
     }
 
     private func upsertDiscoveredPeer(_ peerID: MCPeerID, info: [String: String]?) {
@@ -125,15 +178,19 @@ extension NearbyService: MCNearbyServiceAdvertiserDelegate {
                     didReceiveInvitationFromPeer peerID: MCPeerID,
                     withContext context: Data?,
                     invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        // Optionally validate the invitation context or peer. For now, accept if we have a session and gameID.
-        guard self.session != nil else {
-            invitationHandler(false, nil)
-            return
+        // Decode the invitation context if provided
+        var decodedContext: InvitationContext? = nil
+        if let context = context {
+            decodedContext = try? JSONDecoder().decode(InvitationContext.self, from: context)
         }
 
-        // If discovery info included a gameID, it's not available here directly; you could encode it in context.
-        // For now, accept all invitations and rely on filtering during discovery.
-        invitationHandler(true, self.session)
+        // Store the handler and publish a pending invitation for UI to decide
+        self.storedInvitationHandler = invitationHandler
+        let invitingPeer = NearbyPeer(id: peerID.displayName, displayName: peerID.displayName, gameID: decodedContext?.gameID, maxPlayers: decodedContext?.maxPlayers)
+        publishOnMain {
+            self.pendingInvitation = (from: invitingPeer, context: decodedContext ?? InvitationContext(gameID: self.currentGameID ?? "", playerName: peerID.displayName, maxPlayers: self.computeMaxPlayers()))
+            self.connectionState = .connecting
+        }
     }
 }
 
@@ -192,3 +249,4 @@ extension NearbyService {
     }
     #endif
 }
+
