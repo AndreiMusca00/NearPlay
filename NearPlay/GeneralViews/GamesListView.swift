@@ -4,26 +4,12 @@ struct GamesListView: View {
     @Environment(\._playerNameBinding) private var playerName: Binding<String>
     @State private var isEditingName = false
 
-    private let games: [String] = [
-        "Tic-Tac-Toe",
-        "Backgammon",
-        "Minesweeper",
-        "Snake"
-    ]
-
     var body: some View {
         NavigationStack {
             List {
+                // Header with player name and edit button
                 Section {
-                    ForEach(games, id: \.self) { title in
-                        NavigationLink(value: title) {
-                            HStack {
-                                Image(systemName: icon(for: title))
-                                    
-                                Text(title)
-                            }
-                        }
-                    }
+                    EmptyView()
                 } header: {
                     HStack(spacing: 8) {
                         Text("Player:")
@@ -37,11 +23,25 @@ struct GamesListView: View {
                             .buttonStyle(.borderless)
                     }
                 }
+
+                // Games list
+                Section {
+                    ForEach(Game.all) { game in
+                        NavigationLink(value: game) {
+                            VStack(alignment: .leading) {
+                                Text(game.title).font(.headline)
+                                Text("Players: \(game.minPlayers)-\(game.maxPlayers)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
             }
-            .navigationTitle("Offline Games")
-            .navigationDestination(for: String.self) { title in
-                PlaceholderGameView(title: title)
+            .navigationDestination(for: Game.self) { game in
+                GameLobbyView(game: game)
             }
+            .navigationTitle("NearPlay")
             .sheet(isPresented: $isEditingName) {
                 EditNameSheet(name: playerName)
                     .presentationDetents([.medium])
