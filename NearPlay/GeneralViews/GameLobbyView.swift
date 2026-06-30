@@ -8,6 +8,10 @@ struct GameLobbyView: View {
 
     @State private var progress: Double = 0
     @State private var isSearching: Bool = false
+    @State private var shouldStartGame: Bool = false
+    @State private var localMark: TicTacToeMark?
+    @State private var startPayload: TicTacToeStartPayload?
+    @State private var isStartingGame: Bool = false
 
     private var safePlayerName: String {
         playerName.isEmpty ? "Player" : playerName
@@ -41,6 +45,34 @@ struct GameLobbyView: View {
 
                 discoveredPeersSection
                 connectedPeersSection
+
+                if game.id == Game.ticTacToe.id && (nearbyService.connectedPeers.count + 1) >= game.minPlayers {
+                    Button("Start Game") {
+                        guard let firstPeer = nearbyService.connectedPeers.first else { return }
+                        let xName = safePlayerName
+                        let oName = firstPeer.displayName
+                        let payload = TicTacToeStartPayload(xPlayerName: xName, oPlayerName: oName)
+                        do {
+                            let data = try JSONEncoder().encode(payload)
+                            let message = NearbyMessage(
+                                gameID: game.id,
+                                senderName: xName,
+                                type: .gameStart,
+                                payload: data
+                            )
+                            nearbyService.send(message)
+
+                            localMark = .x
+                            startPayload = payload
+                            isStartingGame = true
+                            shouldStartGame = true
+                        } catch {
+                            // Ignore encoding errors for now
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
                 debugSection
             }
 
@@ -57,7 +89,9 @@ struct GameLobbyView: View {
         .padding()
         .navigationTitle(game.title)
         .onDisappear {
-            nearbyService.stop()
+            if !isStartingGame {
+                nearbyService.stop()
+            }
         }
         .alert("Invitation", isPresented: invitationBinding) {
             Button("Accept") {
@@ -73,6 +107,27 @@ struct GameLobbyView: View {
             } else {
                 Text("")
             }
+        }
+        .onChange(of: nearbyService.lastReceivedMessage) { oldValue, newValue in
+            guard let message = newValue else { return }
+            guard message.gameID == game.id else { return }
+            if message.type == .gameStart, let data = message.payload {
+                if let payload = try? JSONDecoder().decode(TicTacToeStartPayload.self, from: data) {
+                    localMark = .o
+                    startPayload = payload
+                    isStartingGame = true
+                    shouldStartGame = true
+                }
+            }
+        }
+        .navigationDestination(isPresented: $shouldStartGame) {
+            TicTacToeView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                localMark: localMark ?? .o,
+                startPayload: startPayload ?? TicTacToeStartPayload(xPlayerName: safePlayerName, oPlayerName: nearbyService.connectedPeers.first?.displayName ?? "Peer")
+            )
         }
     }
 
@@ -296,3 +351,4 @@ private struct HoldToSearchButton: View {
         GameLobbyView(game: .ticTacToe)
     }
 }
+
