@@ -14,7 +14,3 @@ struct OfflineGamesRootView: View {
         .withPlayerNameStorage()
     }
 }
-
-#Preview {
-    OfflineGamesRootView()
-}

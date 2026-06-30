@@ -28,7 +28,6 @@ struct GameLobbyView: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            statusSection
 
             if !isSearching {
                 HoldToSearchButton(progress: $progress) {
@@ -77,24 +76,8 @@ struct GameLobbyView: View {
         }
     }
 
-    private var statusSection: some View {
-        VStack(spacing: 8) {
-            Text("Your name: \(safePlayerName)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Text("Status: \(String(describing: nearbyService.connectionState))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     private var discoveredPeersSection: some View {
         VStack(spacing: 12) {
-            Text("Discovered devices")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
             if nearbyService.discoveredPeers.isEmpty {
                 Text("No devices found yet")
                     .foregroundStyle(.secondary)
