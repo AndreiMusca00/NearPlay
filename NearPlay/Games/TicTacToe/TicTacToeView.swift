@@ -15,6 +15,8 @@ struct TicTacToeView: View {
     let startPayload: TicTacToeStartPayload
 
     @State private var ticTacToeGame = TicTacToeGame()
+    @State private var localWantsPlayAgain: Bool = false
+    @State private var remoteWantsPlayAgain: Bool = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -44,11 +46,27 @@ struct TicTacToeView: View {
             }
 
             if ticTacToeGame.winner != nil || ticTacToeGame.isDraw {
-                Button("Reset") {
-                    ticTacToeGame.reset()
-                    // Optionally send a reset message later; for now local only per requirements
+                VStack(spacing: 8) {
+                    if localWantsPlayAgain && remoteWantsPlayAgain {
+                        Text("Starting next round…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else if localWantsPlayAgain {
+                        Text("Waiting for opponent…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else if remoteWantsPlayAgain {
+                        Text("Opponent wants to play again")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("Play Again") {
+                        requestPlayAgain()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(localWantsPlayAgain)
                 }
-                .buttonStyle(.borderedProminent)
             }
 
             Spacer()
@@ -120,6 +138,39 @@ struct TicTacToeView: View {
         }
     }
 
+    private func requestPlayAgain() {
+        // Only request a new round if current game is over
+        guard ticTacToeGame.winner != nil || ticTacToeGame.isDraw else { return }
+        guard !localWantsPlayAgain else { return }
+
+        localWantsPlayAgain = true
+
+        let payload = TicTacToePlayAgainPayload(requestedBy: localPlayerName)
+        do {
+            let data = try JSONEncoder().encode(payload)
+            let message = NearbyMessage(
+                gameID: game.id,
+                senderName: localPlayerName,
+                type: .gameState,
+                payload: data
+            )
+            nearbyService.send(message)
+        } catch {
+            // Ignore encoding errors for now
+            print("Failed to encode play again payload: \(error)")
+        }
+
+        tryStartNextRoundIfReady()
+    }
+
+    private func tryStartNextRoundIfReady() {
+        guard localWantsPlayAgain && remoteWantsPlayAgain else { return }
+        // Reset board and clear flags
+        ticTacToeGame.reset()
+        localWantsPlayAgain = false
+        remoteWantsPlayAgain = false
+    }
+
     private func handleIncoming(_ message: NearbyMessage?) {
         guard let message = message else { return }
         // Only handle messages for this game
@@ -139,7 +190,13 @@ struct TicTacToeView: View {
                 // Ignore decoding errors for now
                 print("Failed to decode move: \(error)")
             }
-        case .gameState, .custom:
+        case .gameState:
+            guard let payload = message.payload else { return }
+            if let _ = try? JSONDecoder().decode(TicTacToePlayAgainPayload.self, from: payload) {
+                remoteWantsPlayAgain = true
+                tryStartNextRoundIfReady()
+            }
+        case .custom:
             // Not used yet
             break
         default:
@@ -152,4 +209,3 @@ struct TicTacToeView: View {
     // Placeholder preview; NearbyService is not instantiated here since it's owned by lobby in the app.
     Text("TicTacToeView Preview")
 }
-

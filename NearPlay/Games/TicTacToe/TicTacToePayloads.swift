@@ -35,3 +35,11 @@ public struct TicTacToeResetPayload: Codable, Equatable {
         self.requestedBy = requestedBy
     }
 }
+public struct TicTacToePlayAgainPayload: Codable, Equatable {
+    public let requestedBy: String
+
+    public init(requestedBy: String) {
+        self.requestedBy = requestedBy
+    }
+}
+

@@ -346,9 +346,3 @@ private struct HoldToSearchButton: View {
     }
 }
 
-#Preview {
-    NavigationStack {
-        GameLobbyView(game: .ticTacToe)
-    }
-}
-
