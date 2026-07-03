@@ -16,6 +16,7 @@ enum NearbyMessageType: String, Codable {
     case playerLeft
     case endGame
     case custom
+    case gameQuit
 }
 
 struct NearbyMessage: Codable, Identifiable, Hashable {

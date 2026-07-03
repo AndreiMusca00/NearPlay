@@ -43,3 +43,12 @@ public struct TicTacToePlayAgainPayload: Codable, Equatable {
     }
 }
 
+public struct GameQuitPayload: Codable, Equatable {
+    public let playerName: String
+    public let reason: String
+
+    public init(playerName: String, reason: String) {
+        self.playerName = playerName
+        self.reason = reason
+    }
+}

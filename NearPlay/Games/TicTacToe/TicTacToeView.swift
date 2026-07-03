@@ -14,9 +14,15 @@ struct TicTacToeView: View {
     let localMark: TicTacToeMark
     let startPayload: TicTacToeStartPayload
 
+    @Environment(\.dismiss) private var dismiss
+
     @State private var ticTacToeGame = TicTacToeGame()
     @State private var localWantsPlayAgain: Bool = false
     @State private var remoteWantsPlayAgain: Bool = false
+    @State private var showQuitConfirmation: Bool = false
+    @State private var isQuitting: Bool = false
+
+    var onExitToHome: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 16) {
@@ -73,6 +79,35 @@ struct TicTacToeView: View {
         }
         .navigationBarBackButtonHidden(true)
         .padding()
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showQuitConfirmation = true
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .accessibilityLabel("Quit game")
+            }
+        }
+        .overlay {
+            if isQuitting {
+                ZStack {
+                    Color.black.opacity(0.2).ignoresSafeArea()
+                    ProgressView("Leaving game…")
+                        .padding()
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+        }
+        .alert("Quit game?", isPresented: $showQuitConfirmation) {
+            Button("Quit Game", role: .destructive) {
+                quitGame()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You and your opponent will return to the main screen.")
+        }
         .onChange(of: nearbyService.lastReceivedMessage) { oldValue, newValue in
             handleIncoming(newValue)
         }
@@ -172,6 +207,30 @@ struct TicTacToeView: View {
         remoteWantsPlayAgain = false
     }
 
+    private func quitGame() {
+        isQuitting = true
+        let payload = GameQuitPayload(playerName: localPlayerName, reason: "quit")
+        let data = try? JSONEncoder().encode(payload)
+        let message = NearbyMessage(
+            gameID: game.id,
+            senderName: localPlayerName,
+            type: .gameQuit,
+            payload: data
+        )
+        nearbyService.send(message)
+
+        // Give the reliable message a brief moment to send before disconnecting
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            // First, stop the session
+            nearbyService.stop()
+            // Pop this view off the navigation stack
+            dismiss()
+            // Then ask parent (lobby) to dismiss itself to go home
+            onExitToHome()
+            isQuitting = false
+        }
+    }
+
     private func handleIncoming(_ message: NearbyMessage?) {
         guard let message = message else { return }
         // Only handle messages for this game
@@ -200,6 +259,13 @@ struct TicTacToeView: View {
         case .custom:
             // Not used yet
             break
+        case .gameQuit:
+            // Opponent quit: stop service and exit to home
+            nearbyService.stop()
+            // Pop this view
+            dismiss()
+            // Dismiss lobby to go home
+            onExitToHome()
         default:
             break
         }

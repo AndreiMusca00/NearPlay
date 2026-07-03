@@ -5,6 +5,7 @@ struct GameLobbyView: View {
 
     @StateObject private var nearbyService = NearbyService()
     @AppStorage(PlayerProfile.nameKey) private var playerName: String = ""
+    @Environment(\.dismiss) private var dismiss
 
     @State private var progress: Double = 0
     @State private var isSearching: Bool = false
@@ -126,7 +127,16 @@ struct GameLobbyView: View {
                 nearbyService: nearbyService,
                 localPlayerName: safePlayerName,
                 localMark: localMark ?? .o,
-                startPayload: startPayload ?? TicTacToeStartPayload(xPlayerName: safePlayerName, oPlayerName: nearbyService.connectedPeers.first?.displayName ?? "Peer")
+                startPayload: startPayload ?? TicTacToeStartPayload(xPlayerName: safePlayerName, oPlayerName: nearbyService.connectedPeers.first?.displayName ?? "Peer"),
+                onExitToHome: {
+                    // Ensure the service is stopped and exit to main list
+                    print("Lobby: onExitToHome called, stopping and dismissing")
+                    nearbyService.stop()
+                    isStartingGame = false
+                    // Dismiss the lobby itself so we don't return here
+                    dismiss()
+                    print("Lobby: called dismiss()")
+                }
             )
         }
     }
