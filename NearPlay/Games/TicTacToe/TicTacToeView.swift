@@ -71,6 +71,7 @@ struct TicTacToeView: View {
 
             Spacer()
         }
+        .navigationBarBackButtonHidden(true)
         .padding()
         .onChange(of: nearbyService.lastReceivedMessage) { oldValue, newValue in
             handleIncoming(newValue)
