@@ -10,12 +10,58 @@ import Foundation
 struct Game: Identifiable, Hashable {
     let id: String
     let title: String
+    let shortDescription: String
+
     let minPlayers: Int
     let maxPlayers: Int
+
+    // Numele imaginii din Assets.xcassets
+    let imageName: String
+
+    // SF Symbol folosit dacă imaginea nu există încă
+    let fallbackSystemImage: String
+
+    // Culoarea specifică jocului
+    let accentHex: String
+
+    var playerCountText: String {
+        if minPlayers == maxPlayers {
+            return minPlayers == 1
+                ? "1 player"
+                : "\(minPlayers) players"
+        }
+
+        return "\(minPlayers)–\(maxPlayers) players"
+    }
 }
 
+// MARK: - Available games
+
 extension Game {
-    static let ticTacToe = Game(id: "tic_tac_toe", title: "Tic Tac Toe", minPlayers: 2, maxPlayers: 2)
-    static let rockPaperScissors = Game(id: "rock_paper_scissors",title: "Rock Paper Scissors",minPlayers: 2,maxPlayers: 2)
-    static let all: [Game] = [ticTacToe, rockPaperScissors]
+    static let ticTacToe = Game(
+        id: "tic_tac_toe",
+        title: "Tic Tac Toe",
+        shortDescription: "The classic game of Xs and Os.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_tic_tac_toe",
+        fallbackSystemImage: "grid",
+        accentHex: "#18C8FF"
+    )
+
+    static let rockPaperScissors = Game(
+        id: "rock_paper_scissors",
+        title: "Rock Paper Scissors",
+        shortDescription: "Choose your move and defeat your opponent.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_rock_paper_scissors",
+        fallbackSystemImage: "hand.raised.fill",
+        accentHex: "#914DFF"
+    )
+
+    static let all: [Game] = [
+        ticTacToe,
+        rockPaperScissors
+    ]
 }
