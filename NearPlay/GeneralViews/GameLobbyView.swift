@@ -10,12 +10,29 @@ struct GameLobbyView: View {
     @State private var progress: Double = 0
     @State private var isSearching: Bool = false
     @State private var shouldStartGame: Bool = false
+
+    // Tic Tac Toe state
     @State private var localMark: TicTacToeMark?
-    @State private var startPayload: TicTacToeStartPayload?
+    @State private var ticTacToeStartPayload: TicTacToeStartPayload?
+
+    // Rock Paper Scissors state
+    @State private var rpsStartPayload: RPSStartPayload?
+
+    // Used so the lobby does not stop NearbyService when navigating into a game.
     @State private var isStartingGame: Bool = false
 
     private var safePlayerName: String {
         playerName.isEmpty ? "Player" : playerName
+    }
+
+    private var isSupportedGame: Bool {
+        game.id == Game.ticTacToe.id ||
+        game.id == Game.rockPaperScissors.id
+    }
+
+    private var canStartGame: Bool {
+        isSupportedGame &&
+        (nearbyService.connectedPeers.count + 1) >= game.minPlayers
     }
 
     private var invitationBinding: Binding<Bool> {
@@ -33,7 +50,6 @@ struct GameLobbyView: View {
 
     var body: some View {
         VStack(spacing: 24) {
-
             if !isSearching {
                 HoldToSearchButton(progress: $progress) {
                     startSearching()
@@ -45,36 +61,15 @@ struct GameLobbyView: View {
                     .transition(.opacity)
 
                 discoveredPeersSection
+
                 connectedPeersSection
 
-                if game.id == Game.ticTacToe.id && (nearbyService.connectedPeers.count + 1) >= game.minPlayers {
+                if canStartGame {
                     Button("Start Game") {
-                        guard let firstPeer = nearbyService.connectedPeers.first else { return }
-                        let xName = safePlayerName
-                        let oName = firstPeer.displayName
-                        let payload = TicTacToeStartPayload(xPlayerName: xName, oPlayerName: oName)
-                        do {
-                            let data = try JSONEncoder().encode(payload)
-                            let message = NearbyMessage(
-                                gameID: game.id,
-                                senderName: xName,
-                                type: .gameStart,
-                                payload: data
-                            )
-                            nearbyService.send(message)
-
-                            localMark = .x
-                            startPayload = payload
-                            isStartingGame = true
-                            shouldStartGame = true
-                        } catch {
-                            // Ignore encoding errors for now
-                        }
+                        startSelectedGame()
                     }
                     .buttonStyle(.borderedProminent)
                 }
-
-                //debugSection
             }
 
             if let error = nearbyService.errorMessage, !error.isEmpty {
@@ -109,35 +104,12 @@ struct GameLobbyView: View {
                 Text("")
             }
         }
-        .onChange(of: nearbyService.lastReceivedMessage) { oldValue, newValue in
-            guard let message = newValue else { return }
-            guard message.gameID == game.id else { return }
-            if message.type == .gameStart, let data = message.payload {
-                if let payload = try? JSONDecoder().decode(TicTacToeStartPayload.self, from: data) {
-                    localMark = .o
-                    startPayload = payload
-                    isStartingGame = true
-                    shouldStartGame = true
-                }
-            }
+        .onReceive(nearbyService.$lastReceivedMessage) { message in
+            guard let message else { return }
+            handleReceivedMessage(message)
         }
         .navigationDestination(isPresented: $shouldStartGame) {
-            TicTacToeView(
-                game: game,
-                nearbyService: nearbyService,
-                localPlayerName: safePlayerName,
-                localMark: localMark ?? .o,
-                startPayload: startPayload ?? TicTacToeStartPayload(xPlayerName: safePlayerName, oPlayerName: nearbyService.connectedPeers.first?.displayName ?? "Peer"),
-                onExitToHome: {
-                    // Ensure the service is stopped and exit to main list
-                    print("Lobby: onExitToHome called, stopping and dismissing")
-                    nearbyService.stop()
-                    isStartingGame = false
-                    // Dismiss the lobby itself so we don't return here
-                    dismiss()
-                    print("Lobby: called dismiss()")
-                }
-            )
+            gameDestination
         }
     }
 
@@ -211,35 +183,35 @@ struct GameLobbyView: View {
     }
 
     @ViewBuilder
-    private var debugSection: some View {
-        if !nearbyService.connectedPeers.isEmpty {
-            VStack(spacing: 12) {
-                Button("Send Ping") {
-                    sendPing()
-                }
-                .buttonStyle(.borderedProminent)
+    private var gameDestination: some View {
+        switch game.id {
+        case Game.ticTacToe.id:
+            TicTacToeView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                localMark: localMark ?? .o,
+                startPayload: ticTacToeStartPayload ?? TicTacToeStartPayload(
+                    xPlayerName: safePlayerName,
+                    oPlayerName: nearbyService.connectedPeers.first?.displayName ?? "Peer"
+                ),
+                onExitToHome: exitToHome
+            )
 
-                if let last = nearbyService.lastReceivedMessage {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Last received:")
-                            .font(.headline)
+        case Game.rockPaperScissors.id:
+            RPSView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload: rpsStartPayload ?? RPSStartPayload(
+                    playerOneName: safePlayerName,
+                    playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer"
+                ),
+                onExitToHome: exitToHome
+            )
 
-                        Text("\(last.type.rawValue) from \(last.senderName)")
-                            .font(.subheadline)
-
-                        if let data = last.payload,
-                           let text = String(data: data, encoding: .utf8) {
-                            Text("Payload: \(text)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(Color.gray.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                }
-            }
+        default:
+            Text("Game not implemented yet")
         }
     }
 
@@ -255,17 +227,136 @@ struct GameLobbyView: View {
         }
     }
 
-    private func sendPing() {
-        let payload = "ping".data(using: .utf8)
+    private func startSelectedGame() {
+        switch game.id {
+        case Game.ticTacToe.id:
+            startTicTacToe()
 
-        let message = NearbyMessage(
-            gameID: game.id,
-            senderName: safePlayerName,
-            type: .custom,
-            payload: payload
+        case Game.rockPaperScissors.id:
+            startRockPaperScissors()
+
+        default:
+            break
+        }
+    }
+
+    private func startTicTacToe() {
+        guard let firstPeer = nearbyService.connectedPeers.first else { return }
+
+        let xName = safePlayerName
+        let oName = firstPeer.displayName
+
+        let payload = TicTacToeStartPayload(
+            xPlayerName: xName,
+            oPlayerName: oName
         )
 
-        nearbyService.send(message)
+        do {
+            let data = try JSONEncoder().encode(payload)
+
+            let message = NearbyMessage(
+                gameID: game.id,
+                senderName: xName,
+                type: .gameStart,
+                payload: data
+            )
+
+            nearbyService.send(message)
+
+            localMark = .x
+            ticTacToeStartPayload = payload
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Tic Tac Toe."
+            print("Failed to encode TicTacToeStartPayload: \(error)")
+        }
+    }
+
+    private func startRockPaperScissors() {
+        guard let firstPeer = nearbyService.connectedPeers.first else { return }
+
+        let payload = RPSStartPayload(
+            playerOneName: safePlayerName,
+            playerTwoName: firstPeer.displayName
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+
+            let message = NearbyMessage(
+                gameID: game.id,
+                senderName: safePlayerName,
+                type: .gameStart,
+                payload: data
+            )
+
+            nearbyService.send(message)
+
+            rpsStartPayload = payload
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Rock Paper Scissors."
+            print("Failed to encode RPSStartPayload: \(error)")
+        }
+    }
+
+    private func handleReceivedMessage(_ message: NearbyMessage) {
+        guard message.gameID == game.id else { return }
+        guard message.type == .gameStart else { return }
+        guard let data = message.payload else { return }
+
+        switch game.id {
+        case Game.ticTacToe.id:
+            handleTicTacToeStart(data)
+
+        case Game.rockPaperScissors.id:
+            handleRockPaperScissorsStart(data)
+
+        default:
+            break
+        }
+    }
+
+    private func handleTicTacToeStart(_ data: Data) {
+        do {
+            let payload = try JSONDecoder().decode(
+                TicTacToeStartPayload.self,
+                from: data
+            )
+
+            localMark = .o
+            ticTacToeStartPayload = payload
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Tic Tac Toe."
+            print("Failed to decode TicTacToeStartPayload: \(error)")
+        }
+    }
+
+    private func handleRockPaperScissorsStart(_ data: Data) {
+        do {
+            let payload = try JSONDecoder().decode(
+                RPSStartPayload.self,
+                from: data
+            )
+
+            rpsStartPayload = payload
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Rock Paper Scissors."
+            print("Failed to decode RPSStartPayload: \(error)")
+        }
+    }
+
+    private func exitToHome() {
+        nearbyService.stop()
+        isStartingGame = false
+        shouldStartGame = false
+        dismiss()
     }
 }
 
@@ -323,6 +414,7 @@ private struct HoldToSearchButton: View {
         progress = 0
 
         timer?.invalidate()
+
         timer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { timer in
             guard let holdStartDate else { return }
 
@@ -356,3 +448,8 @@ private struct HoldToSearchButton: View {
     }
 }
 
+#Preview {
+    NavigationStack {
+        GameLobbyView(game: .ticTacToe)
+    }
+}

@@ -16,5 +16,6 @@ struct Game: Identifiable, Hashable {
 
 extension Game {
     static let ticTacToe = Game(id: "tic_tac_toe", title: "Tic Tac Toe", minPlayers: 2, maxPlayers: 2)
-    static let all: [Game] = [ticTacToe]
+    static let rockPaperScissors = Game(id: "rock_paper_scissors",title: "Rock Paper Scissors",minPlayers: 2,maxPlayers: 2)
+    static let all: [Game] = [ticTacToe, rockPaperScissors]
 }
