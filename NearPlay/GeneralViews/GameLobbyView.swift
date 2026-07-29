@@ -74,7 +74,7 @@ struct GameLobbyView: View {
                     .buttonStyle(.borderedProminent)
                 }
 
-                debugSection
+                //debugSection
             }
 
             if let error = nearbyService.errorMessage, !error.isEmpty {
