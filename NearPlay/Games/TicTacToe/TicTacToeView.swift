@@ -16,21 +16,68 @@ struct TicTacToeView: View {
     let localPlayerName: String
     let localMark: TicTacToeMark
     let startPayload: TicTacToeStartPayload
+    let onExitToHome: () -> Void
 
     @Environment(\.dismiss)
     private var dismiss
 
+    @StateObject
+    private var rematchController: RematchController
+
     @State private var ticTacToeGame = TicTacToeGame()
-
-    @State private var localWantsPlayAgain = false
-    @State private var remoteWantsPlayAgain = false
-
     @State private var showQuitConfirmation = false
     @State private var isQuitting = false
 
-    var onExitToHome: () -> Void = {}
+    init(
+        game: Game,
+        nearbyService: NearbyService,
+        localPlayerName: String,
+        localMark: TicTacToeMark,
+        startPayload: TicTacToeStartPayload,
+        onExitToHome: @escaping () -> Void = {}
+    ) {
+        self.game = game
+        self.nearbyService = nearbyService
+        self.localPlayerName = localPlayerName
+        self.localMark = localMark
+        self.startPayload = startPayload
+        self.onExitToHome = onExitToHome
 
-    // MARK: - Body
+        let remotePlayerID =
+            nearbyService.connectedPeers.first?.id ?? "peer"
+
+        let sortedPlayerIDs = [
+            nearbyService.localPlayerID,
+            remotePlayerID
+        ]
+        .sorted()
+
+        let fallbackSessionID = [
+            game.id,
+            sortedPlayerIDs.joined(separator: "-")
+        ]
+        .joined(separator: "-")
+
+        let sessionID =
+            nearbyService.lobbySession?.sessionID ??
+            fallbackSessionID
+
+        let hostPlayerID =
+            nearbyService.lobbySession?.hostPlayerID ??
+            sortedPlayerIDs.first ??
+            nearbyService.localPlayerID
+
+        _rematchController = StateObject(
+            wrappedValue: RematchController(
+                gameID: game.id,
+                sessionID: sessionID,
+                localPlayerID: nearbyService.localPlayerID,
+                localPlayerName: localPlayerName,
+                hostPlayerID: hostPlayerID,
+                nearbyService: nearbyService
+            )
+        )
+    }
 
     var body: some View {
         ZStack {
@@ -45,7 +92,6 @@ struct TicTacToeView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         playersSection
-
                         turnStatusView
 
                         boardView
@@ -61,13 +107,22 @@ struct TicTacToeView: View {
             }
 
             if isGameOver {
-                resultDialogOverlay
-                    .transition(
-                        .opacity.combined(
-                            with: .scale(scale: 0.94)
-                        )
-                    )
-                    .zIndex(10)
+                GameResultOverlay(
+                    result: localRoundResult,
+                    title: resultTitle,
+                    subtitle: resultSubtitle,
+                    symbolName: resultSymbolName,
+                    accentColor: resultAccentColor,
+                    rematchState: rematchController.state,
+                    onPrimaryAction: {
+                        rematchController.performPrimaryAction()
+                    },
+                    onQuit: {
+                        // Din dialogul final ieșim direct, fără a doua alertă.
+                        quitGame()
+                    }
+                )
+                .zIndex(10)
             }
 
             if isQuitting {
@@ -78,13 +133,6 @@ struct TicTacToeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .preferredColorScheme(.dark)
-        .animation(
-            .spring(
-                response: 0.42,
-                dampingFraction: 0.84
-            ),
-            value: isGameOver
-        )
         .alert(
             "Quit game?",
             isPresented: $showQuitConfirmation
@@ -110,6 +158,24 @@ struct TicTacToeView: View {
         ) { message in
             handleIncoming(message)
         }
+        .onChange(
+            of: rematchController.confirmedRoundNumber
+        ) { _, confirmedRound in
+            guard confirmedRound != nil else {
+                return
+            }
+
+            withAnimation(
+                .spring(
+                    response: 0.40,
+                    dampingFraction: 0.84
+                )
+            ) {
+                ticTacToeGame.reset()
+            }
+
+            rematchController.finishStartingRound()
+        }
     }
 
     // MARK: - Header
@@ -120,19 +186,12 @@ struct TicTacToeView: View {
                 showQuitConfirmation = true
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(
-                        .system(
-                            size: 20,
-                            weight: .semibold
-                        )
-                    )
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 48, height: 48)
                     .background {
                         Circle()
-                            .fill(
-                                Color.white.opacity(0.055)
-                            )
+                            .fill(Color.white.opacity(0.055))
                     }
                     .overlay {
                         Circle()
@@ -160,15 +219,8 @@ struct TicTacToeView: View {
                     .lineLimit(1)
 
                 Text(headerSubtitle)
-                    .font(
-                        .system(
-                            size: 13,
-                            weight: .medium
-                        )
-                    )
-                    .foregroundStyle(
-                        headerSubtitleColor
-                    )
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(headerSubtitleColor)
                     .lineLimit(1)
             }
 
@@ -176,9 +228,7 @@ struct TicTacToeView: View {
 
             ZStack {
                 Circle()
-                    .fill(
-                        Color.white.opacity(0.055)
-                    )
+                    .fill(Color.white.opacity(0.055))
                     .frame(width: 48, height: 48)
 
                 Circle()
@@ -194,12 +244,7 @@ struct TicTacToeView: View {
                         ? "wifi.slash"
                         : "wifi"
                 )
-                .font(
-                    .system(
-                        size: 18,
-                        weight: .semibold
-                    )
-                )
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(
                     nearbyService.connectedPeers.isEmpty
                         ? Color.orange
@@ -218,11 +263,9 @@ struct TicTacToeView: View {
             return "Round draw"
         }
 
-        if isLocalTurn {
-            return "Your turn"
-        }
-
-        return "\(opponentName)'s turn"
+        return isLocalTurn
+            ? "Your turn"
+            : "\(opponentName)'s turn"
     }
 
     private var headerSubtitleColor: Color {
@@ -239,31 +282,29 @@ struct TicTacToeView: View {
 
     private var playersSection: some View {
         HStack(spacing: 12) {
-            PlayerStatusCard(
+            TicTacToePlayerCard(
                 name: startPayload.xPlayerName,
                 mark: .x,
                 isLocalPlayer: localMark == .x,
                 isCurrentTurn:
                     !isGameOver &&
                     ticTacToeGame.currentTurn == .x,
-                isWinner:
-                    ticTacToeGame.winner == .x
+                isWinner: ticTacToeGame.winner == .x
             )
 
-            PlayerStatusCard(
+            TicTacToePlayerCard(
                 name: startPayload.oPlayerName,
                 mark: .o,
                 isLocalPlayer: localMark == .o,
                 isCurrentTurn:
                     !isGameOver &&
                     ticTacToeGame.currentTurn == .o,
-                isWinner:
-                    ticTacToeGame.winner == .o
+                isWinner: ticTacToeGame.winner == .o
             )
         }
     }
 
-    // MARK: - Turn status
+    // MARK: - Status
 
     private var turnStatusView: some View {
         HStack(spacing: 10) {
@@ -287,11 +328,7 @@ struct TicTacToeView: View {
                 )
             } else {
                 Circle()
-                    .fill(
-                        isLocalTurn
-                            ? Color.green
-                            : Color.orange
-                    )
+                    .fill(isLocalTurn ? Color.green : Color.orange)
                     .frame(width: 8, height: 8)
                     .shadow(
                         color:
@@ -311,21 +348,14 @@ struct TicTacToeView: View {
             Spacer()
 
             if !isGameOver {
-                GameMarkView(
+                TicTacToeMarkView(
                     mark: ticTacToeGame.currentTurn,
                     size: 22
                 )
             }
         }
-        .font(
-            .system(
-                size: 15,
-                weight: .semibold
-            )
-        )
-        .foregroundStyle(
-            Color.white.opacity(0.72)
-        )
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundStyle(Color.white.opacity(0.72))
         .padding(.horizontal, 16)
         .frame(height: 50)
         .background {
@@ -333,19 +363,14 @@ struct TicTacToeView: View {
                 cornerRadius: 16,
                 style: .continuous
             )
-            .fill(
-                Color.white.opacity(0.028)
-            )
+            .fill(Color.white.opacity(0.028))
         }
         .overlay {
             RoundedRectangle(
                 cornerRadius: 16,
                 style: .continuous
             )
-            .stroke(
-                Color.white.opacity(0.09),
-                lineWidth: 1
-            )
+            .stroke(Color.white.opacity(0.09), lineWidth: 1)
         }
     }
 
@@ -357,12 +382,8 @@ struct TicTacToeView: View {
                 geometry.size.width,
                 geometry.size.height
             )
-
             let spacing: CGFloat = 10
-
-            let cellSize = (
-                side - spacing * 2
-            ) / 3
+            let cellSize = (side - spacing * 2) / 3
 
             ZStack {
                 LazyVGrid(
@@ -382,14 +403,11 @@ struct TicTacToeView: View {
                         )
                     }
                 }
-                .frame(
-                    width: side,
-                    height: side
-                )
+                .frame(width: side, height: side)
 
                 if let winningCombination,
                    let winner = ticTacToeGame.winner {
-                    WinningLineView(
+                    TicTacToeWinningLine(
                         combination: winningCombination,
                         mark: winner,
                         boardSide: side,
@@ -399,14 +417,8 @@ struct TicTacToeView: View {
                     .transition(.opacity)
                 }
             }
-            .frame(
-                width: side,
-                height: side
-            )
-            .frame(
-                maxWidth: .infinity,
-                maxHeight: .infinity
-            )
+            .frame(width: side, height: side)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .aspectRatio(1, contentMode: .fit)
     }
@@ -431,9 +443,7 @@ struct TicTacToeView: View {
                     LinearGradient(
                         colors: [
                             Color.white.opacity(
-                                isWinningCell
-                                    ? 0.075
-                                    : 0.04
+                                isWinningCell ? 0.075 : 0.04
                             ),
                             Color.white.opacity(0.018)
                         ],
@@ -446,10 +456,7 @@ struct TicTacToeView: View {
                     cornerRadius: 22,
                     style: .continuous
                 )
-                .stroke(
-                    Color.white.opacity(0.11),
-                    lineWidth: 1
-                )
+                .stroke(Color.white.opacity(0.11), lineWidth: 1)
 
                 if isWinningCell,
                    let winner = ticTacToeGame.winner {
@@ -468,14 +475,12 @@ struct TicTacToeView: View {
                 }
 
                 if let mark {
-                    GameMarkView(
+                    TicTacToeMarkView(
                         mark: mark,
                         size: size * 0.53
                     )
                     .transition(
-                        .scale.combined(
-                            with: .opacity
-                        )
+                        .scale.combined(with: .opacity)
                     )
                 }
             }
@@ -492,19 +497,9 @@ struct TicTacToeView: View {
             !isBoardInteractive ||
             mark != nil
         )
-        .accessibilityLabel(
-            accessibilityText(
-                for: mark,
-                at: index
-            )
-        )
     }
 
-    private var isBoardInteractive: Bool {
-        isLocalTurn && !isGameOver
-    }
-
-    // MARK: - Connection status
+    // MARK: - Connection
 
     private var connectionStatusView: some View {
         HStack(spacing: 11) {
@@ -525,15 +520,8 @@ struct TicTacToeView: View {
                     ? "Opponent disconnected"
                     : "Connected to \(opponentName)"
             )
-            .font(
-                .system(
-                    size: 14,
-                    weight: .medium
-                )
-            )
-            .foregroundStyle(
-                Color.white.opacity(0.55)
-            )
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.55))
 
             Spacer()
         }
@@ -544,103 +532,15 @@ struct TicTacToeView: View {
                 cornerRadius: 16,
                 style: .continuous
             )
-            .fill(
-                Color.white.opacity(0.022)
-            )
+            .fill(Color.white.opacity(0.022))
         }
         .overlay {
             RoundedRectangle(
                 cornerRadius: 16,
                 style: .continuous
             )
-            .stroke(
-                Color.white.opacity(0.08),
-                lineWidth: 1
-            )
+            .stroke(Color.white.opacity(0.08), lineWidth: 1)
         }
-    }
-
-    // MARK: - Result dialog
-
-    private var resultDialogOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.64)
-                .ignoresSafeArea()
-
-            MatchResultDialog(
-                resultTitle: resultTitle,
-                resultSubtitle: resultSubtitle,
-                resultMark: ticTacToeGame.winner,
-                isDraw: ticTacToeGame.isDraw,
-                informationText: rematchInformationText,
-                primaryButtonTitle: rematchButtonTitle,
-                isPrimaryButtonDisabled:
-                    localWantsPlayAgain,
-                onPrimaryAction: {
-                    requestPlayAgain()
-                },
-                onQuit: {
-                    quitGame()
-                }
-            )
-            .padding(.horizontal, 22)
-            .padding(.vertical, 30)
-        }
-    }
-
-    private var resultTitle: String {
-        if ticTacToeGame.isDraw {
-            return "It's a Draw!"
-        }
-
-        guard let winnerName else {
-            return "Round Finished"
-        }
-
-        if didLocalPlayerWin {
-            return "You Win!"
-        }
-
-        return "\(winnerName) Wins!"
-    }
-
-    private var resultSubtitle: String {
-        if ticTacToeGame.isDraw {
-            return "Nobody won this round."
-        }
-
-        if didLocalPlayerWin {
-            return "Great game, \(localPlayerName)."
-        }
-
-        return "Better luck in the next round."
-    }
-
-    private var rematchInformationText: String {
-        if remoteWantsPlayAgain &&
-            !localWantsPlayAgain {
-            return "\(opponentName) wants to play again."
-        }
-
-        if localWantsPlayAgain &&
-            !remoteWantsPlayAgain {
-            return "Waiting for \(opponentName) to accept."
-        }
-
-        return "Would you like to play another round?"
-    }
-
-    private var rematchButtonTitle: String {
-        if remoteWantsPlayAgain &&
-            !localWantsPlayAgain {
-            return "Accept"
-        }
-
-        if localWantsPlayAgain {
-            return "Waiting…"
-        }
-
-        return "Play Again"
     }
 
     // MARK: - Quit overlay
@@ -656,12 +556,7 @@ struct TicTacToeView: View {
                     .scaleEffect(1.15)
 
                 Text("Leaving game…")
-                    .font(
-                        .system(
-                            size: 16,
-                            weight: .semibold
-                        )
-                    )
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
             }
             .padding(.horizontal, 30)
@@ -671,9 +566,7 @@ struct TicTacToeView: View {
                     cornerRadius: 22,
                     style: .continuous
                 )
-                .fill(
-                    TicTacToeTheme.cardBackground
-                )
+                .fill(TicTacToeTheme.cardBackground)
             }
             .overlay {
                 RoundedRectangle(
@@ -688,6 +581,60 @@ struct TicTacToeView: View {
         }
     }
 
+    // MARK: - Result
+
+    private var localRoundResult: GameRoundResult {
+        if ticTacToeGame.isDraw {
+            return .draw
+        }
+
+        return ticTacToeGame.winner == localMark
+            ? .win
+            : .loss
+    }
+
+    private var resultTitle: String {
+        switch localRoundResult {
+        case .win:
+            return "You Win!"
+        case .loss:
+            return "You Lose"
+        case .draw:
+            return "It's a Draw!"
+        }
+    }
+
+    private var resultSubtitle: String {
+        switch localRoundResult {
+        case .win:
+            return "Great game, \(localPlayerName)."
+        case .loss:
+            return "Better luck in the next round."
+        case .draw:
+            return "Nobody won this round."
+        }
+    }
+
+    private var resultSymbolName: String {
+        if ticTacToeGame.isDraw {
+            return "equal"
+        }
+
+        guard let winner = ticTacToeGame.winner else {
+            return "gamecontroller.fill"
+        }
+
+        return winner == .x ? "xmark" : "circle"
+    }
+
+    private var resultAccentColor: Color {
+        guard let winner = ticTacToeGame.winner else {
+            return Color.white.opacity(0.78)
+        }
+
+        return markColor(winner)
+    }
+
     // MARK: - Game state
 
     private var isLocalTurn: Bool {
@@ -697,6 +644,10 @@ struct TicTacToeView: View {
     private var isGameOver: Bool {
         ticTacToeGame.winner != nil ||
         ticTacToeGame.isDraw
+    }
+
+    private var isBoardInteractive: Bool {
+        isLocalTurn && !isGameOver
     }
 
     private var opponentName: String {
@@ -715,39 +666,27 @@ struct TicTacToeView: View {
             : startPayload.oPlayerName
     }
 
-    private var didLocalPlayerWin: Bool {
-        ticTacToeGame.winner == localMark
-    }
-
     private var winningCombination: [Int]? {
         let combinations: [[Int]] = [
             [0, 1, 2],
             [3, 4, 5],
             [6, 7, 8],
-
             [0, 3, 6],
             [1, 4, 7],
             [2, 5, 8],
-
             [0, 4, 8],
             [2, 4, 6]
         ]
 
         for combination in combinations {
             guard let firstMark =
-                    ticTacToeGame.board[
-                        combination[0]
-                    ] else {
+                    ticTacToeGame.board[combination[0]] else {
                 continue
             }
 
-            let isWinningCombination =
-                combination.allSatisfy { index in
-                    ticTacToeGame.board[index] ==
-                    firstMark
-                }
-
-            if isWinningCombination {
+            if combination.allSatisfy({ index in
+                ticTacToeGame.board[index] == firstMark
+            }) {
                 return combination
             }
         }
@@ -755,11 +694,9 @@ struct TicTacToeView: View {
         return nil
     }
 
-    // MARK: - Board actions
+    // MARK: - Actions
 
-    private func cellTapped(
-        _ index: Int
-    ) {
+    private func cellTapped(_ index: Int) {
         guard isBoardInteractive else {
             return
         }
@@ -773,10 +710,8 @@ struct TicTacToeView: View {
             return
         }
 
-        UIImpactFeedbackGenerator(
-            style: .light
-        )
-        .impactOccurred()
+        UIImpactFeedbackGenerator(style: .light)
+            .impactOccurred()
 
         let payload = TicTacToeMovePayload(
             index: index,
@@ -784,8 +719,7 @@ struct TicTacToeView: View {
         )
 
         do {
-            let data = try JSONEncoder()
-                .encode(payload)
+            let data = try JSONEncoder().encode(payload)
 
             let message = NearbyMessage(
                 gameID: game.id,
@@ -795,101 +729,17 @@ struct TicTacToeView: View {
             )
 
             nearbyService.send(message)
-
             gameResultHapticIfNeeded()
         } catch {
-            print(
-                "Failed to encode move: \(error)"
-            )
+            print("Failed to encode move: \(error)")
         }
     }
-
-    private func gameResultHapticIfNeeded() {
-        guard isGameOver else {
-            return
-        }
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.15
-        ) {
-            if didLocalPlayerWin {
-                UINotificationFeedbackGenerator()
-                    .notificationOccurred(.success)
-            } else {
-                UINotificationFeedbackGenerator()
-                    .notificationOccurred(.warning)
-            }
-        }
-    }
-
-    // MARK: - Rematch
-
-    private func requestPlayAgain() {
-        guard isGameOver else {
-            return
-        }
-
-        guard !localWantsPlayAgain else {
-            return
-        }
-
-        localWantsPlayAgain = true
-
-        UIImpactFeedbackGenerator(
-            style: .medium
-        )
-        .impactOccurred()
-
-        let payload = TicTacToePlayAgainPayload(
-            requestedBy: localPlayerName
-        )
-
-        do {
-            let data = try JSONEncoder()
-                .encode(payload)
-
-            let message = NearbyMessage(
-                gameID: game.id,
-                senderName: localPlayerName,
-                type: .gameState,
-                payload: data
-            )
-
-            nearbyService.send(message)
-        } catch {
-            print(
-                "Failed to encode play again payload: \(error)"
-            )
-        }
-
-        tryStartNextRoundIfReady()
-    }
-
-    private func tryStartNextRoundIfReady() {
-        guard localWantsPlayAgain &&
-              remoteWantsPlayAgain else {
-            return
-        }
-
-        UINotificationFeedbackGenerator()
-            .notificationOccurred(.success)
-
-        withAnimation(
-            .spring(
-                response: 0.4,
-                dampingFraction: 0.84
-            )
-        ) {
-            ticTacToeGame.reset()
-
-            localWantsPlayAgain = false
-            remoteWantsPlayAgain = false
-        }
-    }
-
-    // MARK: - Quit
 
     private func quitGame() {
+        guard !isQuitting else {
+            return
+        }
+
         isQuitting = true
 
         let payload = GameQuitPayload(
@@ -897,8 +747,7 @@ struct TicTacToeView: View {
             reason: "quit"
         )
 
-        let data = try? JSONEncoder()
-            .encode(payload)
+        let data = try? JSONEncoder().encode(payload)
 
         let message = NearbyMessage(
             gameID: game.id,
@@ -909,33 +758,28 @@ struct TicTacToeView: View {
 
         nearbyService.send(message)
 
-        // Lăsăm mesajului reliable puțin timp
-        // să fie trimis înainte de deconectare.
         DispatchQueue.main.asyncAfter(
             deadline: .now() + 0.4
         ) {
             nearbyService.stop()
 
-            // Important: păstrat conform flow-ului tău.
+            // Păstrat exact pentru flow-ul corect de navigare.
             dismiss()
-
-            // Închide și lobby-ul pentru revenirea la home.
             onExitToHome()
 
             isQuitting = false
         }
     }
 
-    // MARK: - Incoming messages
-
     private func handleIncoming(
         _ message: NearbyMessage?
     ) {
-        guard let message else {
+        guard let message,
+              message.gameID == game.id else {
             return
         }
 
-        guard message.gameID == game.id else {
+        if rematchController.handleIncoming(message) {
             return
         }
 
@@ -943,14 +787,8 @@ struct TicTacToeView: View {
         case .gameAction:
             handleIncomingMove(message)
 
-        case .gameState:
-            handleIncomingGameState(message)
-
         case .gameQuit:
             handleOpponentQuit()
-
-        case .custom:
-            break
 
         default:
             break
@@ -976,65 +814,45 @@ struct TicTacToeView: View {
             )
 
             if moved {
-                UIImpactFeedbackGenerator(
-                    style: .soft
-                )
-                .impactOccurred()
+                UIImpactFeedbackGenerator(style: .soft)
+                    .impactOccurred()
 
                 gameResultHapticIfNeeded()
             }
         } catch {
-            print(
-                "Failed to decode move: \(error)"
-            )
-        }
-    }
-
-    private func handleIncomingGameState(
-        _ message: NearbyMessage
-    ) {
-        guard let payload = message.payload else {
-            return
-        }
-
-        do {
-            let playAgainPayload =
-                try JSONDecoder().decode(
-                    TicTacToePlayAgainPayload.self,
-                    from: payload
-                )
-
-            // Protecție în cazul în care serviciul
-            // ar retransmite local propriul mesaj.
-            guard playAgainPayload.requestedBy !=
-                    localPlayerName else {
-                return
-            }
-
-            remoteWantsPlayAgain = true
-
-            UINotificationFeedbackGenerator()
-                .notificationOccurred(.success)
-
-            tryStartNextRoundIfReady()
-        } catch {
-            print(
-                "Failed to decode play again payload: \(error)"
-            )
+            print("Failed to decode move: \(error)")
         }
     }
 
     private func handleOpponentQuit() {
         nearbyService.stop()
 
-        // Important: păstrat pentru navigarea corectă.
+        // Păstrat exact pentru navigarea corectă.
         dismiss()
-
-        // Închide lobby-ul și revine la pagina principală.
         onExitToHome()
     }
 
-    // MARK: - Helpers
+    private func gameResultHapticIfNeeded() {
+        guard isGameOver else {
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.15
+        ) {
+            switch localRoundResult {
+            case .win:
+                UINotificationFeedbackGenerator()
+                    .notificationOccurred(.success)
+            case .loss:
+                UINotificationFeedbackGenerator()
+                    .notificationOccurred(.warning)
+            case .draw:
+                UINotificationFeedbackGenerator()
+                    .notificationOccurred(.warning)
+            }
+        }
+    }
 
     private func markColor(
         _ mark: TicTacToeMark
@@ -1043,28 +861,13 @@ struct TicTacToeView: View {
             ? TicTacToeTheme.xBlue
             : TicTacToeTheme.oPurple
     }
-
-    private func accessibilityText(
-        for mark: TicTacToeMark?,
-        at index: Int
-    ) -> String {
-        let row = index / 3 + 1
-        let column = index % 3 + 1
-
-        guard let mark else {
-            return "Empty cell, row \(row), column \(column)"
-        }
-
-        return "\(mark == .x ? "X" : "O"), row \(row), column \(column)"
-    }
 }
 
 // MARK: - Player card
 
-private struct PlayerStatusCard: View {
+private struct TicTacToePlayerCard: View {
     let name: String
     let mark: TicTacToeMark
-
     let isLocalPlayer: Bool
     let isCurrentTurn: Bool
     let isWinner: Bool
@@ -1081,71 +884,38 @@ private struct PlayerStatusCard: View {
         }
 
         if isCurrentTurn {
-            return isLocalPlayer
-                ? "Your turn"
-                : "Playing"
+            return isLocalPlayer ? "Your turn" : "Playing"
         }
 
-        return isLocalPlayer
-            ? "You"
-            : "Opponent"
+        return isLocalPlayer ? "You" : "Opponent"
     }
 
     var body: some View {
         HStack(spacing: 13) {
-            GameMarkView(
-                mark: mark,
-                size: 34
-            )
+            TicTacToeMarkView(mark: mark, size: 34)
 
-            VStack(
-                alignment: .leading,
-                spacing: 4
-            ) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(name)
-                    .font(
-                        .system(
-                            size: 17,
-                            weight: .semibold
-                        )
-                    )
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
 
                 Text(statusText)
-                    .font(
-                        .system(
-                            size: 13,
-                            weight: .medium
-                        )
-                    )
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(
                         isWinner || isCurrentTurn
                             ? accentColor
                             : Color.white.opacity(0.42)
                     )
-                    .lineLimit(1)
             }
 
             Spacer(minLength: 4)
 
             if isWinner {
                 Image(systemName: "crown.fill")
-                    .font(
-                        .system(
-                            size: 15,
-                            weight: .semibold
-                        )
-                    )
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.yellow)
-                    .frame(width: 31, height: 31)
-                    .background {
-                        Circle()
-                            .fill(
-                                Color.yellow.opacity(0.12)
-                            )
-                    }
             }
         }
         .padding(.horizontal, 14)
@@ -1158,9 +928,7 @@ private struct PlayerStatusCard: View {
             )
             .fill(
                 Color.white.opacity(
-                    isCurrentTurn || isWinner
-                        ? 0.05
-                        : 0.025
+                    isCurrentTurn || isWinner ? 0.05 : 0.025
                 )
             )
         }
@@ -1169,10 +937,7 @@ private struct PlayerStatusCard: View {
                 cornerRadius: 22,
                 style: .continuous
             )
-            .stroke(
-                Color.white.opacity(0.10),
-                lineWidth: 1
-            )
+            .stroke(Color.white.opacity(0.10), lineWidth: 1)
 
             if isCurrentTurn || isWinner {
                 RoundedRectangle(
@@ -1202,9 +967,9 @@ private struct PlayerStatusCard: View {
     }
 }
 
-// MARK: - Game mark
+// MARK: - Mark
 
-private struct GameMarkView: View {
+private struct TicTacToeMarkView: View {
     let mark: TicTacToeMark
     let size: CGFloat
 
@@ -1216,17 +981,12 @@ private struct GameMarkView: View {
 
     var body: some View {
         Image(
-            systemName:
-                mark == .x
-                ? "xmark"
-                : "circle"
+            systemName: mark == .x ? "xmark" : "circle"
         )
         .font(
             .system(
                 size: size,
-                weight: mark == .x
-                    ? .medium
-                    : .regular
+                weight: mark == .x ? .medium : .regular
             )
         )
         .foregroundStyle(color)
@@ -1243,10 +1003,9 @@ private struct GameMarkView: View {
 
 // MARK: - Winning line
 
-private struct WinningLineView: View {
+private struct TicTacToeWinningLine: View {
     let combination: [Int]
     let mark: TicTacToeMark
-
     let boardSide: CGFloat
     let spacing: CGFloat
 
@@ -1257,15 +1016,11 @@ private struct WinningLineView: View {
     }
 
     var body: some View {
-        let cellSize = (
-            boardSide - spacing * 2
-        ) / 3
-
+        let cellSize = (boardSide - spacing * 2) / 3
         let startPoint = point(
             for: combination.first ?? 0,
             cellSize: cellSize
         )
-
         let endPoint = point(
             for: combination.last ?? 0,
             cellSize: cellSize
@@ -1282,18 +1037,9 @@ private struct WinningLineView: View {
                 lineCap: .round
             )
         )
-        .shadow(
-            color: color.opacity(0.95),
-            radius: 7
-        )
-        .shadow(
-            color: color.opacity(0.55),
-            radius: 14
-        )
-        .frame(
-            width: boardSide,
-            height: boardSide
-        )
+        .shadow(color: color.opacity(0.95), radius: 7)
+        .shadow(color: color.opacity(0.55), radius: 14)
+        .frame(width: boardSide, height: boardSide)
     }
 
     private func point(
@@ -1304,347 +1050,14 @@ private struct WinningLineView: View {
         let column = index % 3
 
         let x =
-            CGFloat(column) *
-            (cellSize + spacing) +
+            CGFloat(column) * (cellSize + spacing) +
             cellSize / 2
 
         let y =
-            CGFloat(row) *
-            (cellSize + spacing) +
+            CGFloat(row) * (cellSize + spacing) +
             cellSize / 2
 
         return CGPoint(x: x, y: y)
-    }
-}
-
-// MARK: - Result dialog
-
-private struct MatchResultDialog: View {
-    let resultTitle: String
-    let resultSubtitle: String
-
-    let resultMark: TicTacToeMark?
-    let isDraw: Bool
-
-    let informationText: String
-
-    let primaryButtonTitle: String
-    let isPrimaryButtonDisabled: Bool
-
-    let onPrimaryAction: () -> Void
-    let onQuit: () -> Void
-
-    private var resultColor: Color {
-        guard let resultMark else {
-            return Color.white.opacity(0.75)
-        }
-
-        return resultMark == .x
-            ? TicTacToeTheme.xBlue
-            : TicTacToeTheme.oPurple
-    }
-
-    var body: some View {
-        VStack(spacing: 22) {
-            HStack {
-                Spacer()
-
-                Button {
-                    onQuit()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(
-                            .system(
-                                size: 18,
-                                weight: .semibold
-                            )
-                        )
-                        .foregroundStyle(
-                            Color.white.opacity(0.65)
-                        )
-                        .frame(width: 38, height: 38)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Quit game")
-            }
-            .frame(height: 20)
-
-            ZStack {
-                Circle()
-                    .fill(
-                        resultColor.opacity(0.12)
-                    )
-                    .frame(width: 92, height: 92)
-
-                Circle()
-                    .stroke(
-                        resultColor.opacity(0.65),
-                        lineWidth: 1.5
-                    )
-                    .frame(width: 92, height: 92)
-                    .shadow(
-                        color: resultColor.opacity(0.55),
-                        radius: 14
-                    )
-
-                if isDraw {
-                    Image(systemName: "equal")
-                        .font(
-                            .system(
-                                size: 38,
-                                weight: .bold
-                            )
-                        )
-                        .foregroundStyle(resultColor)
-                } else if let resultMark {
-                    GameMarkView(
-                        mark: resultMark,
-                        size: 43
-                    )
-                }
-            }
-
-            VStack(spacing: 7) {
-                Text(resultTitle)
-                    .font(
-                        .system(
-                            size: 30,
-                            weight: .bold,
-                            design: .rounded
-                        )
-                    )
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-
-                Text(resultSubtitle)
-                    .font(
-                        .system(
-                            size: 15,
-                            weight: .medium
-                        )
-                    )
-                    .foregroundStyle(
-                        Color.white.opacity(0.52)
-                    )
-                    .multilineTextAlignment(.center)
-            }
-
-            HStack(spacing: 13) {
-                Image(systemName: "person.2.fill")
-                    .font(
-                        .system(
-                            size: 22,
-                            weight: .semibold
-                        )
-                    )
-                    .foregroundStyle(
-                        TicTacToeTheme.primaryGradient
-                    )
-                    .frame(width: 42, height: 42)
-                    .background {
-                        RoundedRectangle(
-                            cornerRadius: 12,
-                            style: .continuous
-                        )
-                        .fill(
-                            TicTacToeTheme
-                                .oPurple
-                                .opacity(0.09)
-                        )
-                    }
-
-                Text(informationText)
-                    .font(
-                        .system(
-                            size: 14,
-                            weight: .medium
-                        )
-                    )
-                    .foregroundStyle(
-                        Color.white.opacity(0.65)
-                    )
-                    .multilineTextAlignment(.leading)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: 18,
-                    style: .continuous
-                )
-                .fill(
-                    Color.black.opacity(0.16)
-                )
-            }
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: 18,
-                    style: .continuous
-                )
-                .stroke(
-                    Color.white.opacity(0.08),
-                    lineWidth: 1
-                )
-            }
-
-            HStack(spacing: 12) {
-                Button {
-                    onQuit()
-                } label: {
-                    Text("Quit")
-                        .font(
-                            .system(
-                                size: 17,
-                                weight: .semibold
-                            )
-                        )
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 58)
-                        .background {
-                            RoundedRectangle(
-                                cornerRadius: 18,
-                                style: .continuous
-                            )
-                            .fill(
-                                Color.white.opacity(0.035)
-                            )
-                        }
-                        .overlay {
-                            RoundedRectangle(
-                                cornerRadius: 18,
-                                style: .continuous
-                            )
-                            .stroke(
-                                Color.white.opacity(0.16),
-                                lineWidth: 1
-                            )
-                        }
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    onPrimaryAction()
-                } label: {
-                    HStack(spacing: 9) {
-                        if isPrimaryButtonDisabled {
-                            ProgressView()
-                                .tint(.white)
-                                .scaleEffect(0.85)
-                        }
-
-                        Text(primaryButtonTitle)
-                    }
-                    .font(
-                        .system(
-                            size: 17,
-                            weight: .bold
-                        )
-                    )
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 58)
-                    .background {
-                        RoundedRectangle(
-                            cornerRadius: 18,
-                            style: .continuous
-                        )
-                        .fill(
-                            isPrimaryButtonDisabled
-                                ? LinearGradient(
-                                    colors: [
-                                        TicTacToeTheme.xBlue
-                                            .opacity(0.46),
-                                        TicTacToeTheme.oPurple
-                                            .opacity(0.46)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                : TicTacToeTheme
-                                    .primaryGradient
-                        )
-                    }
-                    .overlay {
-                        RoundedRectangle(
-                            cornerRadius: 18,
-                            style: .continuous
-                        )
-                        .stroke(
-                            Color.white.opacity(
-                                isPrimaryButtonDisabled
-                                    ? 0.14
-                                    : 0.42
-                            ),
-                            lineWidth: 1
-                        )
-                    }
-                    .shadow(
-                        color:
-                            isPrimaryButtonDisabled
-                            ? .clear
-                            : TicTacToeTheme
-                                .xBlue
-                                .opacity(0.38),
-                        radius: 13,
-                        x: -3
-                    )
-                    .shadow(
-                        color:
-                            isPrimaryButtonDisabled
-                            ? .clear
-                            : TicTacToeTheme
-                                .oPurple
-                                .opacity(0.38),
-                        radius: 13,
-                        x: 3
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(isPrimaryButtonDisabled)
-            }
-        }
-        .padding(.horizontal, 22)
-        .padding(.top, 20)
-        .padding(.bottom, 24)
-        .frame(maxWidth: 430)
-        .background {
-            RoundedRectangle(
-                cornerRadius: 30,
-                style: .continuous
-            )
-            .fill(
-                TicTacToeTheme.cardBackground
-            )
-        }
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: 30,
-                style: .continuous
-            )
-            .stroke(
-                TicTacToeTheme.primaryGradient,
-                lineWidth: 1.5
-            )
-        }
-        .shadow(
-            color:
-                TicTacToeTheme
-                    .xBlue
-                    .opacity(0.28),
-            radius: 22,
-            x: -5
-        )
-        .shadow(
-            color:
-                TicTacToeTheme
-                    .oPurple
-                    .opacity(0.28),
-            radius: 22,
-            x: 5
-        )
     }
 }
 
@@ -1695,11 +1108,7 @@ private enum TicTacToeTheme {
     static let primaryGradient = LinearGradient(
         colors: [
             xBlue,
-            Color(
-                red: 0.27,
-                green: 0.36,
-                blue: 1.00
-            ),
+            Color(red: 0.27, green: 0.36, blue: 1.00),
             oPurple
         ],
         startPoint: .leading,

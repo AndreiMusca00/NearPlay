@@ -13,6 +13,7 @@ enum NearbyMessageType: String, Codable {
     case gameStart
     case gameAction
     case gameState
+    case rematch
     case playerJoined
     case playerLeft
     case endGame
