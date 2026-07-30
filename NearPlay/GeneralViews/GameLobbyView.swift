@@ -42,6 +42,9 @@ struct GameLobbyView: View {
     // Rock Paper Scissors
     @State private var rpsStartPayload: RPSStartPayload?
 
+    // Number Rush
+    @State private var numberRushStartPayload: NumberRushStartPayload?
+
     // MARK: - Computed properties
 
     private var safePlayerName: String {
@@ -54,7 +57,8 @@ struct GameLobbyView: View {
 
     private var isSupportedGame: Bool {
         game.id == Game.ticTacToe.id ||
-        game.id == Game.rockPaperScissors.id
+        game.id == Game.rockPaperScissors.id ||
+        game.id == Game.numberRush.id
     }
 
     private var hasConnectedOpponent: Bool {
@@ -901,6 +905,9 @@ struct GameLobbyView: View {
         case Game.rockPaperScissors.id:
             startRockPaperScissors()
 
+        case Game.numberRush.id:
+            startNumberRush()
+
         default:
             isStartingGame = false
         }
@@ -981,6 +988,51 @@ struct GameLobbyView: View {
         }
     }
 
+
+    private func startNumberRush() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+
+        let payload = NumberRushStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            shuffledNumbers: Array(1...100).shuffled(),
+            startingPlayerID: nearbyService.localPlayerID,
+            turnDuration: 5
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+
+            let message = NearbyMessage(
+                gameID: game.id,
+                senderName: safePlayerName,
+                type: .gameStart,
+                payload: data
+            )
+
+            nearbyService.send(message)
+
+            numberRushStartPayload = payload
+            shouldStartGame = true
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage =
+                "Failed to start Number Rush."
+
+            print(
+                "Failed to encode NumberRushStartPayload: \(error)"
+            )
+        }
+    }
+
     // MARK: - Received messages
 
     private func handleReceivedMessage(
@@ -1015,6 +1067,9 @@ struct GameLobbyView: View {
 
             case Game.rockPaperScissors.id:
                 handleRockPaperScissorsStart(data)
+
+            case Game.numberRush.id:
+                handleNumberRushStart(data)
 
             default:
                 break
@@ -1070,6 +1125,29 @@ struct GameLobbyView: View {
         }
     }
 
+
+    private func handleNumberRushStart(
+        _ data: Data
+    ) {
+        do {
+            let payload = try JSONDecoder().decode(
+                NumberRushStartPayload.self,
+                from: data
+            )
+
+            numberRushStartPayload = payload
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage =
+                "Failed to start Number Rush."
+
+            print(
+                "Failed to decode NumberRushStartPayload: \(error)"
+            )
+        }
+    }
+
     // MARK: - Game destination
 
     @ViewBuilder
@@ -1108,6 +1186,41 @@ struct GameLobbyView: View {
                             .connectedPeers
                             .first?
                             .displayName ?? "Peer"
+                    ),
+                onExitToHome: exitToHome
+            )
+
+
+        case Game.numberRush.id:
+            NumberRushView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload:
+                    numberRushStartPayload ??
+                    NumberRushStartPayload(
+                        sessionID:
+                            nearbyService
+                            .lobbySession?
+                            .sessionID ?? UUID().uuidString,
+                        playerOneID:
+                            nearbyService.localPlayerID,
+                        playerOneName: safePlayerName,
+                        playerTwoID:
+                            nearbyService
+                            .connectedPeers
+                            .first?
+                            .id ?? "peer",
+                        playerTwoName:
+                            nearbyService
+                            .connectedPeers
+                            .first?
+                            .displayName ?? "Peer",
+                        shuffledNumbers:
+                            Array(1...100).shuffled(),
+                        startingPlayerID:
+                            nearbyService.localPlayerID,
+                        turnDuration: 5
                     ),
                 onExitToHome: exitToHome
             )

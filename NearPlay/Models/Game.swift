@@ -60,8 +60,21 @@ extension Game {
         accentHex: "#914DFF"
     )
 
+
+    static let numberRush = Game(
+        id: "number_rush",
+        title: "Number Rush",
+        shortDescription: "Find the numbers in order before time runs out.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_number_rush",
+        fallbackSystemImage: "number.square.fill",
+        accentHex: "#19B9FF"
+    )
+
     static let all: [Game] = [
         ticTacToe,
-        rockPaperScissors
+        rockPaperScissors,
+        numberRush
     ]
 }
