@@ -2,29 +2,36 @@ import Foundation
 import MultipeerConnectivity
 import Combine
 
-struct InvitationContext: Codable {
-    let gameID: String
-    let playerName: String
-    let maxPlayers: Int
-}
-
 final class NearbyService: NSObject, ObservableObject {
-    enum ConnectionState {
-        case idle
-        case searching
-        case connecting
-        case connected
-    }
-
-    @Published var connectionState: ConnectionState = .idle
+    @Published var connectionState: NearbyConnectionState = .idle
     @Published var discoveredPeers: [NearbyPeer] = []
     @Published var connectedPeers: [NearbyPeer] = []
     @Published var errorMessage: String?
 
     @Published var lastReceivedMessage: NearbyMessage?
 
-    // For UI alert
-    @Published var pendingInvitation: (from: NearbyPeer, context: InvitationContext)?
+    /// The invitation currently displayed on the receiver's device.
+    @Published private(set) var pendingInvitation: NearbyInvitation?
+
+    /// The invitation currently displayed on the sender's device.
+    @Published private(set) var outgoingInvitation: NearbyOutgoingInvitation?
+
+    /// Used for the short state between accepting and becoming connected.
+    @Published private(set) var connectingPeer: NearbyPeer?
+
+    /// A short, one-second result shown after the remote player explicitly declines.
+    @Published private(set) var invitationFeedback: NearbyInvitationFeedback?
+
+    /// Shared lobby identity. The inviter is always the host/coordinator.
+    @Published private(set) var lobbySession: LobbySessionContext?
+
+    let localPlayerID: String = NearPlayIdentity.playerID
+
+    var isLocalHost: Bool {
+        lobbySession?.hostPlayerID == localPlayerID
+    }
+
+    let invitationDuration: TimeInterval = 5
 
     private let serviceType = "nearplay"
 
@@ -34,22 +41,34 @@ final class NearbyService: NSObject, ObservableObject {
     private var browser: MCNearbyServiceBrowser?
 
     private var currentGameID: String?
+    private var currentPlayerName: String?
     private var currentMaxPlayers: Int = 2
 
-    // Important: keep the real MCPeerID objects discovered by the browser.
-    // Do NOT recreate MCPeerID from displayName when inviting.
+    /// Keyed by the persistent NearPlay player ID.
     private var discoveredMCPeersByID: [String: MCPeerID] = [:]
+    private var connectedMCPeersByID: [String: MCPeerID] = [:]
+
+    /// Keyed by MCPeerID.displayName, the transport identifier used by MPC.
+    private var knownPeersByTransportID: [String: NearbyPeer] = [:]
 
     private var storedInvitationHandler: ((Bool, MCSession?) -> Void)?
 
+    private var incomingInvitationExpiryWorkItem: DispatchWorkItem?
+    private var outgoingInvitationExpiryWorkItem: DispatchWorkItem?
+    private var invitationFeedbackExpiryWorkItem: DispatchWorkItem?
+
     // MARK: - Start / Stop
 
-    func start(gameID: String, playerName: String, maxPlayers: Int) {
+    func start(
+        gameID: String,
+        playerName: String,
+        maxPlayers: Int
+    ) {
         stop()
 
         let safeName = playerName.isEmpty ? "Player" : playerName
+        let peerID = NearPlayIdentity.peerID
 
-        let peerID = MCPeerID(displayName: safeName)
         let session = MCSession(
             peer: peerID,
             securityIdentity: nil,
@@ -61,10 +80,12 @@ final class NearbyService: NSObject, ObservableObject {
         self.peerID = peerID
         self.session = session
         self.currentGameID = gameID
+        self.currentPlayerName = safeName
         self.currentMaxPlayers = maxPlayers
 
         let discoveryInfo: [String: String] = [
             "gameID": gameID,
+            "playerID": localPlayerID,
             "playerName": safeName,
             "maxPlayers": String(maxPlayers)
         ]
@@ -95,6 +116,20 @@ final class NearbyService: NSObject, ObservableObject {
     }
 
     func stop() {
+        incomingInvitationExpiryWorkItem?.cancel()
+        outgoingInvitationExpiryWorkItem?.cancel()
+        invitationFeedbackExpiryWorkItem?.cancel()
+
+        incomingInvitationExpiryWorkItem = nil
+        outgoingInvitationExpiryWorkItem = nil
+        invitationFeedbackExpiryWorkItem = nil
+
+        if let handler = storedInvitationHandler {
+            handler(false, nil)
+        }
+
+        storedInvitationHandler = nil
+
         advertiser?.stopAdvertisingPeer()
         browser?.stopBrowsingForPeers()
         session?.disconnect()
@@ -105,120 +140,266 @@ final class NearbyService: NSObject, ObservableObject {
         peerID = nil
 
         currentGameID = nil
+        currentPlayerName = nil
         currentMaxPlayers = 2
 
         discoveredMCPeersByID.removeAll()
-        storedInvitationHandler = nil
+        connectedMCPeersByID.removeAll()
+        knownPeersByTransportID.removeAll()
 
         publishOnMain {
             self.connectionState = .idle
             self.discoveredPeers.removeAll()
             self.connectedPeers.removeAll()
             self.pendingInvitation = nil
+            self.outgoingInvitation = nil
+            self.connectingPeer = nil
+            self.invitationFeedback = nil
+            self.lobbySession = nil
             self.lastReceivedMessage = nil
             self.errorMessage = nil
         }
     }
 
-    // MARK: - Invite Flow
+    /// Kept for the future reconnect implementation.
+    func restoreLobbySession(
+        _ context: LobbySessionContext
+    ) {
+        guard context.contains(playerID: localPlayerID) else {
+            return
+        }
 
-    func invite(_ peer: NearbyPeer, timeout: TimeInterval = 30) {
-        guard let browser = browser,
-              let session = session,
-              let peerID = peerID,
-              let currentGameID = currentGameID else {
+        publishOnMain {
+            self.lobbySession = context
+        }
+    }
+
+    func clearLobbySession() {
+        publishOnMain {
+            self.lobbySession = nil
+        }
+    }
+
+    // MARK: - Invite flow
+
+    func invite(_ peer: NearbyPeer) {
+        guard connectedPeers.isEmpty else {
+            return
+        }
+
+        guard pendingInvitation == nil,
+              outgoingInvitation == nil,
+              invitationFeedback == nil else {
+            return
+        }
+
+        guard let browser,
+              let session,
+              let currentGameID,
+              let currentPlayerName else {
             publishOnMain {
-                self.errorMessage = "Nearby service is not ready."
+                self.errorMessage =
+                    "Nearby service is not ready."
             }
             return
         }
 
-        guard let targetPeerID = discoveredMCPeersByID[peer.id] else {
+        guard let targetPeerID =
+                discoveredMCPeersByID[peer.id] else {
             publishOnMain {
-                self.errorMessage = "Could not find real peer for \(peer.displayName)."
+                self.errorMessage =
+                    "Could not find real peer for \(peer.displayName)."
             }
             return
         }
 
         let context = InvitationContext(
+            kind: .request,
+            sessionID: UUID().uuidString,
             gameID: currentGameID,
-            playerName: peerID.displayName,
+            inviterPlayerID: localPlayerID,
+            inviterPlayerName: currentPlayerName,
             maxPlayers: currentMaxPlayers
         )
 
+        let now = Date()
+        let outgoing = NearbyOutgoingInvitation(
+            toPeer: peer,
+            context: context,
+            sentAt: now,
+            expiresAt: now.addingTimeInterval(
+                invitationDuration
+            )
+        )
+
+        let sessionContext = LobbySessionContext(
+            sessionID: context.sessionID,
+            gameID: context.gameID,
+            hostPlayerID: context.inviterPlayerID,
+            guestPlayerID: peer.id
+        )
+
         do {
-            let contextData = try JSONEncoder().encode(context)
+            let contextData = try JSONEncoder()
+                .encode(context)
 
             browser.invitePeer(
                 targetPeerID,
                 to: session,
                 withContext: contextData,
-                timeout: timeout
+                timeout: invitationDuration
             )
 
             publishOnMain {
-                self.connectionState = .connecting
+                self.outgoingInvitation = outgoing
+                self.connectingPeer = peer
+                self.lobbySession = sessionContext
+                self.connectionState = .inviting
                 self.errorMessage = nil
             }
+
+            scheduleOutgoingInvitationExpiry(
+                sessionID: context.sessionID
+            )
         } catch {
             publishOnMain {
-                self.errorMessage = "Failed to encode invitation: \(error.localizedDescription)"
+                self.errorMessage =
+                    "Failed to encode invitation: \(error.localizedDescription)"
+                self.connectionState = .failed(
+                    error.localizedDescription
+                )
             }
         }
     }
 
     func acceptInvitation() {
-        guard let handler = storedInvitationHandler,
-              let session = session else {
+        guard let invitation = pendingInvitation,
+              let handler = storedInvitationHandler,
+              let session else {
             publishOnMain {
-                self.errorMessage = "No invitation to accept."
+                self.errorMessage =
+                    "No invitation to accept."
             }
             return
         }
 
+        incomingInvitationExpiryWorkItem?.cancel()
+        incomingInvitationExpiryWorkItem = nil
         storedInvitationHandler = nil
+
+        let sessionContext = LobbySessionContext(
+            sessionID: invitation.context.sessionID,
+            gameID: invitation.context.gameID,
+            hostPlayerID:
+                invitation.context.inviterPlayerID,
+            guestPlayerID: localPlayerID
+        )
 
         publishOnMain {
             self.pendingInvitation = nil
+            self.connectingPeer = invitation.fromPeer
+            self.lobbySession = sessionContext
             self.connectionState = .connecting
+            self.errorMessage = nil
         }
 
         handler(true, session)
     }
 
     func rejectInvitation() {
-        guard let handler = storedInvitationHandler else {
-            publishOnMain {
-                self.pendingInvitation = nil
-            }
+        rejectCurrentInvitation(
+            sendsDeclineResponse: true
+        )
+    }
+
+    private func expireIncomingInvitation() {
+        rejectCurrentInvitation(
+            sendsDeclineResponse: false
+        )
+    }
+
+    private func rejectCurrentInvitation(
+        sendsDeclineResponse: Bool
+    ) {
+        guard let invitation = pendingInvitation else {
             return
         }
 
+        incomingInvitationExpiryWorkItem?.cancel()
+        incomingInvitationExpiryWorkItem = nil
+
+        let handler = storedInvitationHandler
         storedInvitationHandler = nil
 
         publishOnMain {
             self.pendingInvitation = nil
-            self.connectionState = self.browser != nil ? .searching : .idle
+            self.connectingPeer = nil
+
+            if self.connectedPeers.isEmpty {
+                self.connectionState =
+                    self.browser != nil
+                    ? .searching
+                    : .idle
+            }
         }
 
-        handler(false, nil)
+        handler?(false, nil)
+
+        if sendsDeclineResponse {
+            sendDeclineResponse(for: invitation)
+        }
+    }
+
+    /// Before the peers are connected there is no NearbyMessage channel.
+    /// A tiny reverse MPC invitation is therefore used only as a decline response.
+    /// The receiver handles it automatically and never presents it as a game invitation.
+    private func sendDeclineResponse(
+        for invitation: NearbyInvitation
+    ) {
+        guard let browser,
+              let session,
+              let targetPeerID =
+                discoveredMCPeersByID[invitation.fromPeer.id] else {
+            return
+        }
+
+        let response = invitation.context.response(
+            kind: .declined
+        )
+
+        guard let data = try? JSONEncoder().encode(response) else {
+            return
+        }
+
+        browser.invitePeer(
+            targetPeerID,
+            to: session,
+            withContext: data,
+            timeout: 1.5
+        )
     }
 
     // MARK: - Messaging
 
     func send(_ message: NearbyMessage) {
-        guard let session = session else {
+        guard let session else {
             publishOnMain {
                 self.errorMessage = "No active session."
             }
             return
         }
 
-        send(message, toMCPeers: session.connectedPeers)
+        send(
+            message,
+            toMCPeers: session.connectedPeers
+        )
     }
 
-    func send(_ message: NearbyMessage, to peers: [NearbyPeer]) {
-        guard let session = session else {
+    func send(
+        _ message: NearbyMessage,
+        to peers: [NearbyPeer]
+    ) {
+        guard session != nil else {
             publishOnMain {
                 self.errorMessage = "No active session."
             }
@@ -228,76 +409,304 @@ final class NearbyService: NSObject, ObservableObject {
         let targetPeerIDs: [MCPeerID]
 
         if peers.isEmpty {
-            targetPeerIDs = session.connectedPeers
+            targetPeerIDs = session?.connectedPeers ?? []
         } else {
-            targetPeerIDs = session.connectedPeers.filter { mcPeer in
-                peers.contains { nearbyPeer in
-                    nearbyPeer.id == mcPeer.displayName
-                }
+            targetPeerIDs = peers.compactMap {
+                connectedMCPeersByID[$0.id]
             }
         }
 
-        send(message, toMCPeers: targetPeerIDs)
+        send(
+            message,
+            toMCPeers: targetPeerIDs
+        )
     }
 
-    private func send(_ message: NearbyMessage, toMCPeers peers: [MCPeerID]) {
-        guard let session = session else { return }
+    private func send(
+        _ message: NearbyMessage,
+        toMCPeers peers: [MCPeerID]
+    ) {
+        guard let session else {
+            return
+        }
 
         guard !peers.isEmpty else {
             publishOnMain {
-                self.errorMessage = "No connected peers to send message."
+                self.errorMessage =
+                    "No connected peers to send message."
             }
             return
         }
 
         do {
-            let data = try JSONEncoder().encode(message)
-            try session.send(data, toPeers: peers, with: .reliable)
+            let data = try JSONEncoder()
+                .encode(message)
+
+            try session.send(
+                data,
+                toPeers: peers,
+                with: .reliable
+            )
 
             publishOnMain {
                 self.errorMessage = nil
             }
         } catch {
             publishOnMain {
-                self.errorMessage = "Send failed: \(error.localizedDescription)"
+                self.errorMessage =
+                    "Send failed: \(error.localizedDescription)"
             }
         }
     }
 
+    // MARK: - Invitation timers
+
+    private func scheduleIncomingInvitationExpiry(
+        invitationID: UUID
+    ) {
+        incomingInvitationExpiryWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.pendingInvitation?.id == invitationID else {
+                return
+            }
+
+            self.expireIncomingInvitation()
+        }
+
+        incomingInvitationExpiryWorkItem = workItem
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + invitationDuration,
+            execute: workItem
+        )
+    }
+
+    private func scheduleOutgoingInvitationExpiry(
+        sessionID: String
+    ) {
+        outgoingInvitationExpiryWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  let outgoing = self.outgoingInvitation,
+                  outgoing.context.sessionID == sessionID else {
+                return
+            }
+
+            // Dacă MPC a intrat în connecting,
+            // invitația a fost acceptată.
+            guard self.connectionState == .inviting else {
+                return
+            }
+
+            // Afișează același mesaj ca la un Decline manual.
+            self.showInvitationDeclinedFeedback(
+                for: outgoing.toPeer
+            )
+        }
+
+        outgoingInvitationExpiryWorkItem = workItem
+
+        DispatchQueue.main.asyncAfter(
+            deadline:
+                .now() +
+                invitationDuration +
+                0.15,
+            execute: workItem
+        )
+    }
+
+    private func showInvitationDeclinedFeedback(
+        for peer: NearbyPeer
+    ) {
+        outgoingInvitationExpiryWorkItem?.cancel()
+        outgoingInvitationExpiryWorkItem = nil
+
+        let now = Date()
+        let feedback = NearbyInvitationFeedback(
+            peer: peer,
+            kind: .declined,
+            shownAt: now,
+            expiresAt: now.addingTimeInterval(1)
+        )
+
+        outgoingInvitation = nil
+        connectingPeer = nil
+        lobbySession = nil
+        invitationFeedback = feedback
+        connectionState = browser != nil ? .searching : .idle
+
+        scheduleInvitationFeedbackExpiry(
+            feedbackID: feedback.id
+        )
+    }
+
+    private func scheduleInvitationFeedbackExpiry(
+        feedbackID: UUID
+    ) {
+        invitationFeedbackExpiryWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.invitationFeedback?.id == feedbackID else {
+                return
+            }
+
+            self.invitationFeedback = nil
+        }
+
+        invitationFeedbackExpiryWorkItem = workItem
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 1,
+            execute: workItem
+        )
+    }
+
+    private func clearInvitationStateAfterConnection() {
+        incomingInvitationExpiryWorkItem?.cancel()
+        outgoingInvitationExpiryWorkItem?.cancel()
+
+        incomingInvitationExpiryWorkItem = nil
+        outgoingInvitationExpiryWorkItem = nil
+
+        pendingInvitation = nil
+        outgoingInvitation = nil
+        connectingPeer = nil
+        storedInvitationHandler = nil
+    }
+
     // MARK: - Helpers
 
-    private func upsertDiscoveredPeer(_ peerID: MCPeerID, info: [String: String]?) {
-        guard let currentGameID = currentGameID else { return }
+    private func upsertDiscoveredPeer(
+        _ peerID: MCPeerID,
+        info: [String: String]?
+    ) {
+        guard let currentGameID else {
+            return
+        }
 
-        guard info?["gameID"] == currentGameID else { return }
+        guard info?["gameID"] == currentGameID else {
+            return
+        }
+
+        let persistentPlayerID =
+            info?["playerID"] ?? fallbackPlayerID(
+                for: peerID
+            )
+
+        guard persistentPlayerID != localPlayerID else {
+            return
+        }
 
         let peer = NearbyPeer(
-            id: peerID.displayName,
-            displayName: info?["playerName"] ?? peerID.displayName,
+            id: persistentPlayerID,
+            displayName:
+                info?["playerName"] ?? peerID.displayName,
             gameID: info?["gameID"],
-            maxPlayers: Int(info?["maxPlayers"] ?? "")
+            maxPlayers:
+                Int(info?["maxPlayers"] ?? "")
         )
 
         publishOnMain {
             self.discoveredMCPeersByID[peer.id] = peerID
+            self.knownPeersByTransportID[
+                peerID.displayName
+            ] = peer
 
-            let alreadyDiscovered = self.discoveredPeers.contains { $0.id == peer.id }
-            let alreadyConnected = self.connectedPeers.contains { $0.id == peer.id }
+            let alreadyDiscovered =
+                self.discoveredPeers.contains {
+                    $0.id == peer.id
+                }
 
-            if !alreadyDiscovered && !alreadyConnected {
+            let alreadyConnected =
+                self.connectedPeers.contains {
+                    $0.id == peer.id
+                }
+
+            if !alreadyDiscovered &&
+                !alreadyConnected {
                 self.discoveredPeers.append(peer)
             }
         }
     }
 
-    private func removeDiscoveredPeer(_ peerID: MCPeerID) {
+    private func removeDiscoveredPeer(
+        _ peerID: MCPeerID
+    ) {
         publishOnMain {
-            self.discoveredMCPeersByID.removeValue(forKey: peerID.displayName)
-            self.discoveredPeers.removeAll { $0.id == peerID.displayName }
+            guard let peer =
+                    self.knownPeersByTransportID[
+                        peerID.displayName
+                    ] else {
+                return
+            }
+
+            self.discoveredMCPeersByID
+                .removeValue(forKey: peer.id)
+
+            self.discoveredPeers.removeAll {
+                $0.id == peer.id
+            }
+
+            let isStillConnected =
+                self.connectedPeers.contains {
+                    $0.id == peer.id
+                }
+
+            if !isStillConnected {
+                self.knownPeersByTransportID
+                    .removeValue(
+                        forKey: peerID.displayName
+                    )
+            }
         }
     }
 
-    private func publishOnMain(_ block: @escaping () -> Void) {
+    private func fallbackPlayerID(
+        for peerID: MCPeerID
+    ) -> String {
+        let prefix = "NearPlay-"
+
+        if peerID.displayName.hasPrefix(prefix) {
+            return String(
+                peerID.displayName.dropFirst(
+                    prefix.count
+                )
+            )
+        }
+
+        return peerID.displayName
+    }
+
+    private func fallbackPeer(
+        for peerID: MCPeerID
+    ) -> NearbyPeer {
+        NearbyPeer(
+            id: fallbackPlayerID(for: peerID),
+            displayName: peerID.displayName,
+            gameID: currentGameID,
+            maxPlayers: currentMaxPlayers
+        )
+    }
+
+    private func sessionContext(
+        from invitation: InvitationContext,
+        remotePlayerID: String
+    ) -> LobbySessionContext {
+        LobbySessionContext(
+            sessionID: invitation.sessionID,
+            gameID: invitation.gameID,
+            hostPlayerID: invitation.inviterPlayerID,
+            guestPlayerID: remotePlayerID
+        )
+    }
+
+    private func publishOnMain(
+        _ block: @escaping () -> Void
+    ) {
         if Thread.isMainThread {
             block()
         } else {
@@ -316,7 +725,10 @@ extension NearbyService: MCNearbyServiceBrowserDelegate {
         foundPeer peerID: MCPeerID,
         withDiscoveryInfo info: [String: String]?
     ) {
-        upsertDiscoveredPeer(peerID, info: info)
+        upsertDiscoveredPeer(
+            peerID,
+            info: info
+        )
     }
 
     func browser(
@@ -331,8 +743,11 @@ extension NearbyService: MCNearbyServiceBrowserDelegate {
         didNotStartBrowsingForPeers error: Error
     ) {
         publishOnMain {
-            self.errorMessage = "Browser failed: \(error.localizedDescription)"
-            self.connectionState = .idle
+            let message =
+                "Browser failed: \(error.localizedDescription)"
+
+            self.errorMessage = message
+            self.connectionState = .failed(message)
         }
     }
 }
@@ -345,8 +760,11 @@ extension NearbyService: MCNearbyServiceAdvertiserDelegate {
         didNotStartAdvertisingPeer error: Error
     ) {
         publishOnMain {
-            self.errorMessage = "Advertiser failed: \(error.localizedDescription)"
-            self.connectionState = .idle
+            let message =
+                "Advertiser failed: \(error.localizedDescription)"
+
+            self.errorMessage = message
+            self.connectionState = .failed(message)
         }
     }
 
@@ -354,38 +772,114 @@ extension NearbyService: MCNearbyServiceAdvertiserDelegate {
         _ advertiser: MCNearbyServiceAdvertiser,
         didReceiveInvitationFromPeer peerID: MCPeerID,
         withContext context: Data?,
-        invitationHandler: @escaping (Bool, MCSession?) -> Void
+        invitationHandler:
+            @escaping (Bool, MCSession?) -> Void
     ) {
         let decodedContext: InvitationContext?
 
-        if let context = context {
-            decodedContext = try? JSONDecoder().decode(InvitationContext.self, from: context)
+        if let context {
+            decodedContext = try? JSONDecoder().decode(
+                InvitationContext.self,
+                from: context
+            )
         } else {
             decodedContext = nil
         }
 
-        let finalContext = decodedContext ?? InvitationContext(
-            gameID: currentGameID ?? "",
-            playerName: peerID.displayName,
-            maxPlayers: currentMaxPlayers
-        )
+        guard let decodedContext,
+              decodedContext.gameID == currentGameID else {
+            invitationHandler(false, nil)
+            return
+        }
+
+        // A decline arrives as a lightweight reverse invitation because the
+        // real MCSession connection has not been established yet.
+        if decodedContext.kind == .declined {
+            invitationHandler(false, nil)
+
+            publishOnMain {
+                guard let outgoing = self.outgoingInvitation,
+                      outgoing.context.sessionID ==
+                        decodedContext.sessionID else {
+                    return
+                }
+
+                self.showInvitationDeclinedFeedback(
+                    for: outgoing.toPeer
+                )
+            }
+            return
+        }
+
+        guard decodedContext.kind == .request,
+              decodedContext.inviterPlayerID != localPlayerID else {
+            invitationHandler(false, nil)
+            return
+        }
 
         let invitingPeer = NearbyPeer(
-            id: peerID.displayName,
-            displayName: finalContext.playerName,
-            gameID: finalContext.gameID,
-            maxPlayers: finalContext.maxPlayers
+            id: decodedContext.inviterPlayerID,
+            displayName:
+                decodedContext.inviterPlayerName,
+            gameID: decodedContext.gameID,
+            maxPlayers: decodedContext.maxPlayers
         )
 
-        storedInvitationHandler = invitationHandler
-
         publishOnMain {
-            self.pendingInvitation = (
-                from: invitingPeer,
-                context: finalContext
+            guard self.connectedPeers.isEmpty,
+                  self.pendingInvitation == nil else {
+                invitationHandler(false, nil)
+                return
+            }
+
+            // Resolve the rare case where both players invite each other
+            // at practically the same moment. The smaller persistent ID wins.
+            if let outgoing = self.outgoingInvitation {
+                guard outgoing.toPeer.id == invitingPeer.id else {
+                    invitationHandler(false, nil)
+                    return
+                }
+
+                if self.localPlayerID < invitingPeer.id {
+                    invitationHandler(false, nil)
+                    return
+                }
+
+                self.outgoingInvitationExpiryWorkItem?.cancel()
+                self.outgoingInvitationExpiryWorkItem = nil
+                self.outgoingInvitation = nil
+                self.connectingPeer = nil
+                self.lobbySession = nil
+            }
+
+            self.knownPeersByTransportID[
+                peerID.displayName
+            ] = invitingPeer
+
+            self.discoveredMCPeersByID[
+                invitingPeer.id
+            ] = peerID
+
+            let now = Date()
+            let invitation = NearbyInvitation(
+                fromPeer: invitingPeer,
+                context: decodedContext,
+                receivedAt: now,
+                expiresAt: now.addingTimeInterval(
+                    self.invitationDuration
+                )
             )
-            self.connectionState = .connecting
+
+            self.storedInvitationHandler =
+                invitationHandler
+            self.pendingInvitation = invitation
+            self.connectingPeer = invitingPeer
+            self.connectionState = .invited
             self.errorMessage = nil
+
+            self.scheduleIncomingInvitationExpiry(
+                invitationID: invitation.id
+            )
         }
     }
 }
@@ -398,41 +892,82 @@ extension NearbyService: MCSessionDelegate {
         peer peerID: MCPeerID,
         didChange state: MCSessionState
     ) {
-        let peer = NearbyPeer(
-            id: peerID.displayName,
-            displayName: peerID.displayName
-        )
+        guard session === self.session else {
+            return
+        }
 
-        switch state {
-        case .connected:
-            publishOnMain {
-                self.discoveredPeers.removeAll { $0.id == peer.id }
-                self.discoveredMCPeersByID.removeValue(forKey: peer.id)
+        publishOnMain {
+            let peer =
+                self.knownPeersByTransportID[
+                    peerID.displayName
+                ] ?? self.fallbackPeer(
+                    for: peerID
+                )
 
-                if !self.connectedPeers.contains(where: { $0.id == peer.id }) {
+            self.knownPeersByTransportID[
+                peerID.displayName
+            ] = peer
+
+            switch state {
+            case .connected:
+                self.discoveredPeers.removeAll {
+                    $0.id == peer.id
+                }
+
+                self.discoveredMCPeersByID
+                    .removeValue(forKey: peer.id)
+
+                self.connectedMCPeersByID[
+                    peer.id
+                ] = peerID
+
+                if !self.connectedPeers.contains(
+                    where: { $0.id == peer.id }
+                ) {
                     self.connectedPeers.append(peer)
                 }
 
+                // Once a player is connected, this two-player lobby is closed
+                // to any additional invitations.
+                self.advertiser?.stopAdvertisingPeer()
+                self.browser?.stopBrowsingForPeers()
+                self.discoveredPeers.removeAll()
+
+                self.clearInvitationStateAfterConnection()
                 self.connectionState = .connected
                 self.errorMessage = nil
-            }
 
-        case .connecting:
-            publishOnMain {
+            case .connecting:
+                self.outgoingInvitationExpiryWorkItem?.cancel()
+                self.outgoingInvitationExpiryWorkItem = nil
+                self.connectingPeer = peer
                 self.connectionState = .connecting
-            }
 
-        case .notConnected:
-            publishOnMain {
-                self.connectedPeers.removeAll { $0.id == peer.id }
+            case .notConnected:
+                self.connectedPeers.removeAll {
+                    $0.id == peer.id
+                }
+
+                self.connectedMCPeersByID
+                    .removeValue(forKey: peer.id)
 
                 if self.connectedPeers.isEmpty {
-                    self.connectionState = self.browser != nil ? .searching : .idle
+                    if self.outgoingInvitation != nil {
+                        // Rejection and invitation timeout both report
+                        // `.notConnected`. Keep the outgoing card alive until
+                        // the explicit decline response or the five-second timer.
+                        self.connectionState = .inviting
+                    } else {
+                        self.connectionState =
+                            self.browser != nil
+                            ? .searching
+                            : .disconnected
+                    }
                 }
-            }
 
-        @unknown default:
-            break
+            @unknown default:
+                break
+            }
         }
     }
 
@@ -441,8 +976,15 @@ extension NearbyService: MCSessionDelegate {
         didReceive data: Data,
         fromPeer peerID: MCPeerID
     ) {
+        guard session === self.session else {
+            return
+        }
+
         do {
-            let message = try JSONDecoder().decode(NearbyMessage.self, from: data)
+            let message = try JSONDecoder().decode(
+                NearbyMessage.self,
+                from: data
+            )
 
             publishOnMain {
                 self.lastReceivedMessage = message
@@ -450,7 +992,8 @@ extension NearbyService: MCSessionDelegate {
             }
         } catch {
             publishOnMain {
-                self.errorMessage = "Failed to decode message from \(peerID.displayName): \(error.localizedDescription)"
+                self.errorMessage =
+                    "Failed to decode message from \(peerID.displayName): \(error.localizedDescription)"
             }
         }
     }

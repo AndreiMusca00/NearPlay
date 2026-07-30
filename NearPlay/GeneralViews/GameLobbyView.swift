@@ -25,7 +25,15 @@ struct GameLobbyView: View {
     @State private var shouldStartGame = false
     @State private var isStartingGame = false
 
+    @State private var countdownValue: Int?
+    @State private var countdownTimer: Timer?
+    @State private var hasStartedCountdown = false
+
     @State private var showComputerModeInfo = false
+
+    // Keeps the lobby visually frozen behind the dialog while invitation
+    // state, connection state and countdown state are changing.
+    @State private var frozenDiscoveredPeers: [NearbyPeer]?
 
     // Tic-Tac-Toe
     @State private var localMark: TicTacToeMark?
@@ -53,9 +61,27 @@ struct GameLobbyView: View {
         !nearbyService.connectedPeers.isEmpty
     }
 
-    private var canStartGame: Bool {
-        isSupportedGame &&
-        (nearbyService.connectedPeers.count + 1) >= game.minPlayers
+    private var connectedOpponent: NearbyPeer? {
+        nearbyService.connectedPeers.first
+    }
+
+    private var validLobbySession: LobbySessionContext? {
+        guard let session = nearbyService.lobbySession,
+              let connectedOpponent,
+              session.matches(
+                gameID: game.id,
+                firstPlayerID: nearbyService.localPlayerID,
+                secondPlayerID: connectedOpponent.id
+              ) else {
+            return nil
+        }
+
+        return session
+    }
+
+    private var isLocalHost: Bool {
+        validLobbySession?.hostPlayerID ==
+        nearbyService.localPlayerID
     }
 
     private var playerCountText: String {
@@ -72,19 +98,51 @@ struct GameLobbyView: View {
         favoriteGameIDs.wrappedValue.contains(game.id)
     }
 
-    private var invitationBinding: Binding<Bool> {
-        Binding(
-            get: {
-                nearbyService.pendingInvitation != nil &&
-                !hasConnectedOpponent
-            },
-            set: { isPresented in
-                if !isPresented,
-                   nearbyService.pendingInvitation != nil {
-                    nearbyService.rejectInvitation()
-                }
+    private var visibleDiscoveredPeers: [NearbyPeer] {
+        frozenDiscoveredPeers ?? nearbyService.discoveredPeers
+    }
+
+    private var lobbyDialogState: LobbyDialogState? {
+        if let feedback = nearbyService.invitationFeedback {
+            return .declined(feedback)
+        }
+
+        if let countdownValue {
+            return .countdown(
+                value: countdownValue,
+                peerName:
+                    connectedOpponent?.displayName ??
+                    nearbyService.connectingPeer?.displayName ??
+                    "Opponent"
+            )
+        }
+
+        if let invitation = nearbyService.pendingInvitation {
+            return .incoming(invitation)
+        }
+
+        if let outgoing = nearbyService.outgoingInvitation {
+            if nearbyService.connectionState == .connecting ||
+                nearbyService.connectionState == .connected {
+                return .accepted(
+                    peerName: outgoing.toPeer.displayName
+                )
             }
-        )
+
+            return .outgoing(outgoing)
+        }
+
+        if nearbyService.connectionState == .connecting,
+           let peer = nearbyService.connectingPeer {
+            return .accepted(peerName: peer.displayName)
+        }
+
+        if hasConnectedOpponent,
+           let peer = connectedOpponent {
+            return .accepted(peerName: peer.displayName)
+        }
+
+        return nil
     }
 
     // MARK: - Body
@@ -102,65 +160,57 @@ struct GameLobbyView: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        if hasConnectedOpponent {
-                            connectedOpponentContent
-                                .transition(
-                                    .opacity.combined(
-                                        with: .scale(scale: 0.97)
-                                    )
-                                )
-                        } else {
-                            searchingContent
-                                .transition(.opacity)
-                        }
+                        // The lobby remains visually unchanged behind the dialog.
+                        // Only the content inside the same dialog card changes.
+                        searchingContent
 
                         if let error = nearbyService.errorMessage,
                            !error.isEmpty {
                             errorView(error)
                         }
                     }
-                    // Spațiu suplimentar pentru ca glow-ul și conturul
-                    // butonului să nu fie tăiate în partea de sus.
                     .padding(.top, 22)
                     .padding(.horizontal, 20)
-                    .padding(
-                        .bottom,
-                        hasConnectedOpponent ? 125 : 35
-                    )
+                    .padding(.bottom, 35)
                 }
                 .scrollIndicators(.hidden)
+                .allowsHitTesting(lobbyDialogState == nil)
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if hasConnectedOpponent {
-                startGameBottomBar
+
+            if let lobbyDialogState {
+                UnifiedLobbyDialogOverlay(
+                    state: lobbyDialogState,
+                    gameTitle: game.title,
+                    invitationDuration:
+                        nearbyService.invitationDuration,
+                    onAccept: {
+                        UIImpactFeedbackGenerator(
+                            style: .medium
+                        )
+                        .impactOccurred()
+
+                        nearbyService.acceptInvitation()
+                    },
+                    onDecline: {
+                        nearbyService.rejectInvitation()
+                    }
+                )
+                .zIndex(20)
+                .transition(
+                    .opacity.combined(
+                        with: .scale(scale: 0.96)
+                    )
+                )
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .preferredColorScheme(.dark)
         .onDisappear {
+            countdownTimer?.invalidate()
+            countdownTimer = nil
+
             if !isStartingGame {
                 nearbyService.stop()
-            }
-        }
-        .alert(
-            "Invitation",
-            isPresented: invitationBinding
-        ) {
-            Button("Accept") {
-                nearbyService.acceptInvitation()
-            }
-
-            Button("Reject", role: .destructive) {
-                nearbyService.rejectInvitation()
-            }
-        } message: {
-            if let pending = nearbyService.pendingInvitation {
-                Text(
-                    "\(pending.from.displayName) wants to play \(game.title)."
-                )
-            } else {
-                Text("")
             }
         }
         .alert(
@@ -185,14 +235,9 @@ struct GameLobbyView: View {
         .onChange(
             of: nearbyService.connectedPeers.count
         ) { connectedCount in
-            guard connectedCount > 0 else {
+            if connectedCount == 0 {
+                resetAutomaticStartState()
                 return
-            }
-
-            // În cazul în care mai exista o invitație deschisă,
-            // o respingem deoarece avem deja un adversar.
-            if nearbyService.pendingInvitation != nil {
-                nearbyService.rejectInvitation()
             }
 
             withAnimation(
@@ -207,17 +252,30 @@ struct GameLobbyView: View {
 
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.success)
+
+            scheduleHostCountdownIfPossible()
         }
         .onChange(
-            of: nearbyService.pendingInvitation != nil
-        ) { hasPendingInvitation in
-            guard hasPendingInvitation,
-                  hasConnectedOpponent else {
-                return
+            of: nearbyService.lobbySession?.sessionID
+        ) { _ in
+            scheduleHostCountdownIfPossible()
+        }
+        .onChange(
+            of: nearbyService.pendingInvitation?.id
+        ) { invitationID in
+            if invitationID != nil,
+               frozenDiscoveredPeers == nil {
+                frozenDiscoveredPeers =
+                    nearbyService.discoveredPeers
             }
-
-            // Nu acceptăm un al doilea adversar după conectare.
-            nearbyService.rejectInvitation()
+        }
+        .onChange(
+            of: lobbyDialogState != nil
+        ) { isDialogPresented in
+            if !isDialogPresented,
+               !hasConnectedOpponent {
+                frozenDiscoveredPeers = nil
+            }
         }
         .navigationDestination(
             isPresented: $shouldStartGame
@@ -225,6 +283,11 @@ struct GameLobbyView: View {
             gameDestination
         }
     }
+
+    // MARK: - Lobby dialog
+
+    // The dialog is intentionally represented by one view type.
+    // SwiftUI updates its content in place instead of replacing the entire overlay.
 
     // MARK: - Searching content
 
@@ -295,9 +358,7 @@ struct GameLobbyView: View {
                     .minimumScaleFactor(0.72)
 
                 Text(
-                    hasConnectedOpponent
-                        ? "Opponent connected"
-                        : "Nearby multiplayer • \(playerCountText)"
+                    "Nearby multiplayer • \(playerCountText)"
                 )
                 .font(
                     .system(
@@ -306,9 +367,7 @@ struct GameLobbyView: View {
                     )
                 )
                 .foregroundStyle(
-                    hasConnectedOpponent
-                        ? Color.green.opacity(0.85)
-                        : Color.white.opacity(0.5)
+                    Color.white.opacity(0.5)
                 )
                 .lineLimit(1)
             }
@@ -468,7 +527,7 @@ struct GameLobbyView: View {
                 Spacer()
 
                 Text(
-                    "\(nearbyService.discoveredPeers.count) found"
+                    "\(visibleDiscoveredPeers.count) found"
                 )
                 .font(
                     .system(
@@ -481,12 +540,12 @@ struct GameLobbyView: View {
                 )
             }
 
-            if nearbyService.discoveredPeers.isEmpty {
+            if visibleDiscoveredPeers.isEmpty {
                 emptyPlayersView
             } else {
                 VStack(spacing: 12) {
                     ForEach(
-                        nearbyService.discoveredPeers,
+                        visibleDiscoveredPeers,
                         id: \.id
                     ) { peer in
                         NearbyPlayerRow(
@@ -496,6 +555,8 @@ struct GameLobbyView: View {
                                 for: peer.displayName
                             )
                         ) {
+                            frozenDiscoveredPeers =
+                                nearbyService.discoveredPeers
                             nearbyService.invite(peer)
                         }
                     }
@@ -587,6 +648,7 @@ struct GameLobbyView: View {
         }
     }
 
+
     // MARK: - Connected opponent
 
     private var connectedOpponentContent: some View {
@@ -605,7 +667,7 @@ struct GameLobbyView: View {
                         radius: 10
                     )
 
-                Text("Opponent Connected")
+                Text("Invitation Accepted")
                     .font(
                         .system(
                             size: 23,
@@ -615,25 +677,23 @@ struct GameLobbyView: View {
                     )
                     .foregroundStyle(.white)
 
-                Text(
-                    "Everything is ready. You can start the game."
-                )
-                .font(.system(size: 15))
-                .foregroundStyle(
-                    Color.white.opacity(0.5)
-                )
-                .multilineTextAlignment(.center)
+                Text("The game will start automatically.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(
+                        Color.white.opacity(0.5)
+                    )
+                    .multilineTextAlignment(.center)
             }
             .padding(.top, 18)
 
-            if let connectedPeer =
-                nearbyService.connectedPeers.first {
+            if let connectedPeer = connectedOpponent {
                 NearbyPlayerRow(
                     peerName: connectedPeer.displayName,
                     state: .connected,
                     accentColor: accentColor(
                         for: connectedPeer.displayName
                     ),
+                    isReady: true,
                     action: {}
                 )
             }
@@ -641,100 +701,11 @@ struct GameLobbyView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Start game bottom bar
-
-    private var startGameBottomBar: some View {
-        Button {
-            startSelectedGame()
-        } label: {
-            HStack(spacing: 11) {
-                Text("Start Game")
-
-                Image(systemName: "chevron.right")
-                    .font(
-                        .system(
-                            size: 15,
-                            weight: .bold
-                        )
-                    )
-            }
-            .font(
-                .system(
-                    size: 19,
-                    weight: .bold,
-                    design: .rounded
-                )
-            )
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 64)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: 21,
-                    style: .continuous
-                )
-                .fill(
-                    canStartGame
-                        ? LobbyTheme.primaryGradient
-                        : LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.10),
-                                Color.white.opacity(0.06)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                )
-            }
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: 21,
-                    style: .continuous
-                )
-                .stroke(
-                    canStartGame
-                        ? Color.white.opacity(0.35)
-                        : Color.white.opacity(0.10),
-                    lineWidth: 1
-                )
-            }
-            .shadow(
-                color: canStartGame
-                    ? LobbyTheme.brightBlue.opacity(0.32)
-                    : .clear,
-                radius: 15,
-                x: -4
-            )
-            .shadow(
-                color: canStartGame
-                    ? LobbyTheme.brightPurple.opacity(0.32)
-                    : .clear,
-                radius: 15,
-                x: 4
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(!canStartGame)
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
-        .background {
-            LinearGradient(
-                colors: [
-                    LobbyTheme.backgroundBottom.opacity(0),
-                    LobbyTheme.backgroundBottom.opacity(0.96),
-                    LobbyTheme.backgroundBottom
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-        }
-    }
-
     // MARK: - Search
 
     private func startSearching() {
+        frozenDiscoveredPeers = nil
+
         nearbyService.start(
             gameID: game.id,
             playerName: safePlayerName,
@@ -757,12 +728,171 @@ struct GameLobbyView: View {
         .impactOccurred()
     }
 
+    // MARK: - Automatic countdown
+
+    private func scheduleHostCountdownIfPossible() {
+        guard isSupportedGame,
+              hasConnectedOpponent,
+              validLobbySession != nil,
+              isLocalHost,
+              !hasStartedCountdown,
+              !isStartingGame else {
+            return
+        }
+
+        hasStartedCountdown = true
+
+        // Small visual pause after the connection is established.
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.45
+        ) {
+            guard hasConnectedOpponent,
+                  let session = validLobbySession,
+                  isLocalHost,
+                  !isStartingGame else {
+                hasStartedCountdown = false
+                return
+            }
+
+            let payload = LobbyCountdownPayload(
+                sessionID: session.sessionID,
+                seconds: 3
+            )
+
+            do {
+                let data = try JSONEncoder()
+                    .encode(payload)
+
+                let message = NearbyMessage(
+                    gameID: game.id,
+                    senderName: safePlayerName,
+                    type: .lobbyCountdown,
+                    payload: data
+                )
+
+                nearbyService.send(message)
+
+                beginLocalCountdown(
+                    seconds: payload.seconds,
+                    startsGameWhenFinished: true
+                )
+            } catch {
+                hasStartedCountdown = false
+                nearbyService.errorMessage =
+                    "Failed to start the countdown."
+
+                print(
+                    "Failed to encode LobbyCountdownPayload: \(error)"
+                )
+            }
+        }
+    }
+
+    private func handleLobbyCountdown(
+        _ data: Data
+    ) {
+        do {
+            let payload = try JSONDecoder().decode(
+                LobbyCountdownPayload.self,
+                from: data
+            )
+
+            guard let session = validLobbySession,
+                  payload.sessionID == session.sessionID,
+                  !isLocalHost,
+                  !hasStartedCountdown else {
+                return
+            }
+
+            hasStartedCountdown = true
+
+            beginLocalCountdown(
+                seconds: max(payload.seconds, 1),
+                startsGameWhenFinished: false
+            )
+        } catch {
+            nearbyService.errorMessage =
+                "Failed to receive the countdown."
+
+            print(
+                "Failed to decode LobbyCountdownPayload: \(error)"
+            )
+        }
+    }
+
+    private func beginLocalCountdown(
+        seconds: Int,
+        startsGameWhenFinished: Bool
+    ) {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+
+        var remaining = max(seconds, 1)
+
+        withAnimation(
+            .spring(
+                response: 0.34,
+                dampingFraction: 0.78
+            )
+        ) {
+            countdownValue = remaining
+        }
+
+        countdownTimer = Timer.scheduledTimer(
+            withTimeInterval: 1,
+            repeats: true
+        ) { timer in
+            remaining -= 1
+
+            if remaining <= 0 {
+                timer.invalidate()
+                countdownTimer = nil
+
+                withAnimation(.easeOut(duration: 0.18)) {
+                    countdownValue = 0
+                }
+
+                if startsGameWhenFinished {
+                    startSelectedGame()
+                }
+            } else {
+                UIImpactFeedbackGenerator(
+                    style: .soft
+                )
+                .impactOccurred()
+
+                withAnimation(
+                    .spring(
+                        response: 0.28,
+                        dampingFraction: 0.72
+                    )
+                ) {
+                    countdownValue = remaining
+                }
+            }
+        }
+    }
+
+    private func resetAutomaticStartState() {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+        countdownValue = nil
+        hasStartedCountdown = false
+        isStartingGame = false
+    }
+
     // MARK: - Starting games
 
     private func startSelectedGame() {
-        guard canStartGame else {
+        guard isSupportedGame,
+              hasConnectedOpponent,
+              validLobbySession != nil,
+              isLocalHost,
+              !isStartingGame else {
             return
         }
+
+        isStartingGame = true
 
         switch game.id {
         case Game.ticTacToe.id:
@@ -772,13 +902,13 @@ struct GameLobbyView: View {
             startRockPaperScissors()
 
         default:
-            break
+            isStartingGame = false
         }
     }
 
     private func startTicTacToe() {
-        guard let firstPeer =
-                nearbyService.connectedPeers.first else {
+        guard let firstPeer = connectedOpponent else {
+            isStartingGame = false
             return
         }
 
@@ -801,9 +931,10 @@ struct GameLobbyView: View {
 
             localMark = .x
             ticTacToeStartPayload = payload
-            isStartingGame = true
             shouldStartGame = true
         } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
             nearbyService.errorMessage =
                 "Failed to start Tic Tac Toe."
 
@@ -814,8 +945,8 @@ struct GameLobbyView: View {
     }
 
     private func startRockPaperScissors() {
-        guard let firstPeer =
-                nearbyService.connectedPeers.first else {
+        guard let firstPeer = connectedOpponent else {
+            isStartingGame = false
             return
         }
 
@@ -837,9 +968,10 @@ struct GameLobbyView: View {
             nearbyService.send(message)
 
             rpsStartPayload = payload
-            isStartingGame = true
             shouldStartGame = true
         } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
             nearbyService.errorMessage =
                 "Failed to start Rock Paper Scissors."
 
@@ -858,20 +990,35 @@ struct GameLobbyView: View {
             return
         }
 
-        guard message.type == .gameStart else {
-            return
-        }
+        switch message.type {
+        case .lobbyCountdown:
+            guard let data = message.payload else {
+                return
+            }
 
-        guard let data = message.payload else {
-            return
-        }
+            handleLobbyCountdown(data)
 
-        switch game.id {
-        case Game.ticTacToe.id:
-            handleTicTacToeStart(data)
+        case .gameStart:
+            guard !isLocalHost,
+                  validLobbySession != nil,
+                  let data = message.payload else {
+                return
+            }
 
-        case Game.rockPaperScissors.id:
-            handleRockPaperScissorsStart(data)
+            countdownTimer?.invalidate()
+            countdownTimer = nil
+            countdownValue = nil
+
+            switch game.id {
+            case Game.ticTacToe.id:
+                handleTicTacToeStart(data)
+
+            case Game.rockPaperScissors.id:
+                handleRockPaperScissorsStart(data)
+
+            default:
+                break
+            }
 
         default:
             break
@@ -1066,6 +1213,672 @@ struct GameLobbyView: View {
                 lineWidth: 1
             )
         }
+    }
+}
+
+
+// MARK: - Unified invitation dialog
+
+private enum LobbyDialogState: Equatable {
+    case incoming(NearbyInvitation)
+    case outgoing(NearbyOutgoingInvitation)
+    case accepted(peerName: String)
+    case countdown(value: Int, peerName: String)
+    case declined(NearbyInvitationFeedback)
+}
+
+private struct UnifiedLobbyDialogOverlay: View {
+    let state: LobbyDialogState
+    let gameTitle: String
+    let invitationDuration: TimeInterval
+    let onAccept: () -> Void
+    let onDecline: () -> Void
+
+    private var title: String {
+        switch state {
+        case .incoming:
+            return "Game Invitation"
+        case .outgoing:
+            return "Invitation Sent"
+        case .accepted:
+            return "Invitation Accepted"
+        case .countdown(let value, _):
+            return value > 0
+                ? "Game is starting"
+                : "Starting Game"
+        case .declined:
+            return "Invitation Declined"
+        }
+    }
+
+    private var subtitle: String {
+        switch state {
+        case .incoming(let invitation):
+            return "\(invitation.fromPeer.displayName) wants to play \(gameTitle)."
+
+        case .outgoing(let invitation):
+            return "Waiting for \(invitation.toPeer.displayName) to respond."
+
+        case .accepted(let peerName):
+            return "Connected with \(peerName). Preparing the game…"
+
+        case .countdown(let value, let peerName):
+            return value > 0
+                ? "You and \(peerName) are ready."
+                : "Opening \(gameTitle)…"
+
+        case .declined(let feedback):
+            return "\(feedback.peer.displayName) declined your invitation."
+        }
+    }
+
+    private var iconName: String {
+        switch state {
+        case .incoming:
+            return "gamecontroller.fill"
+        case .outgoing:
+            return "paperplane.fill"
+        case .accepted:
+            return "checkmark"
+        case .countdown:
+            return "bolt.fill"
+        case .declined:
+            return "xmark"
+        }
+    }
+
+    private var iconTone: LobbyDialogIcon.Tone {
+        switch state {
+        case .declined:
+            return .danger
+        case .accepted:
+            return .success
+        default:
+            return .primary
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.72)
+                .ignoresSafeArea()
+
+            VStack(spacing: 22) {
+                dialogVisual
+                    .frame(height: 108)
+
+                VStack(spacing: 7) {
+                    Text(title)
+                        .font(
+                            .system(
+                                size: 27,
+                                weight: .bold,
+                                design: .rounded
+                            )
+                        )
+                        .foregroundStyle(.white)
+                        .contentTransition(.interpolate)
+
+                    Text(subtitle)
+                        .font(
+                            .system(
+                                size: 15,
+                                weight: .medium
+                            )
+                        )
+                        .foregroundStyle(
+                            Color.white.opacity(0.58)
+                        )
+                        .multilineTextAlignment(.center)
+                        .frame(minHeight: 40)
+                        .contentTransition(.interpolate)
+                }
+
+                dialogActions
+                    .frame(minHeight: 56)
+
+                dialogProgress
+                    .frame(height: 5)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 28)
+            .padding(.bottom, 20)
+            .frame(maxWidth: 420)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: 30,
+                    style: .continuous
+                )
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(
+                                red: 12.0 / 255.0,
+                                green: 20.0 / 255.0,
+                                blue: 35.0 / 255.0
+                            ),
+                            Color(
+                                red: 7.0 / 255.0,
+                                green: 13.0 / 255.0,
+                                blue: 25.0 / 255.0
+                            )
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            }
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: 30,
+                    style: .continuous
+                )
+                .stroke(
+                    dialogBorder,
+                    lineWidth: 1.4
+                )
+            }
+            .shadow(
+                color: dialogLeftGlow,
+                radius: 22,
+                x: -5
+            )
+            .shadow(
+                color: dialogRightGlow,
+                radius: 22,
+                x: 5
+            )
+            .padding(.horizontal, 22)
+        }
+        .animation(
+            .spring(
+                response: 0.36,
+                dampingFraction: 0.84
+            ),
+            value: state
+        )
+    }
+
+    @ViewBuilder
+    private var dialogVisual: some View {
+        switch state {
+        case .countdown(let value, _):
+            CountdownDialogVisual(value: value)
+
+        default:
+            LobbyDialogIcon(
+                systemName: iconName,
+                tone: iconTone
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var dialogActions: some View {
+        switch state {
+        case .incoming:
+            HStack(spacing: 12) {
+                Button {
+                    onDecline()
+                } label: {
+                    InvitationActionLabel(
+                        title: "Decline",
+                        systemName: "xmark",
+                        isPrimary: false
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    onAccept()
+                } label: {
+                    InvitationActionLabel(
+                        title: "Accept",
+                        systemName: "checkmark",
+                        isPrimary: true
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+        case .outgoing:
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(.white)
+
+                Text("Waiting for response…")
+                    .font(
+                        .system(
+                            size: 15,
+                            weight: .semibold
+                        )
+                    )
+                    .foregroundStyle(
+                        Color.white.opacity(0.72)
+                    )
+            }
+            .frame(maxWidth: .infinity)
+
+        case .accepted:
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(.white)
+
+                Text("Preparing connection…")
+                    .font(
+                        .system(
+                            size: 15,
+                            weight: .semibold
+                        )
+                    )
+                    .foregroundStyle(
+                        Color.white.opacity(0.72)
+                    )
+            }
+            .frame(maxWidth: .infinity)
+
+        case .countdown(let value, _):
+            Text(
+                value > 0
+                    ? "Starting in \(value)…"
+                    : "Starting…"
+            )
+            .font(
+                .system(
+                    size: 17,
+                    weight: .bold,
+                    design: .rounded
+                )
+            )
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .contentTransition(.numericText())
+
+        case .declined:
+            HStack(spacing: 9) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+
+                Text("Returning to nearby players…")
+                    .font(
+                        .system(
+                            size: 15,
+                            weight: .semibold
+                        )
+                    )
+                    .foregroundStyle(
+                        Color.white.opacity(0.72)
+                    )
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var dialogProgress: some View {
+        switch state {
+        case .incoming(let invitation):
+            ExpiringProgressBar(
+                expiresAt: invitation.expiresAt,
+                duration: invitationDuration
+            )
+
+        case .outgoing(let invitation):
+            ExpiringProgressBar(
+                expiresAt: invitation.expiresAt,
+                duration: invitationDuration
+            )
+
+        case .accepted:
+            IndeterminateDialogProgressBar()
+
+        case .countdown(let value, _):
+            CountdownDialogProgressBar(value: value)
+
+        case .declined(let feedback):
+            ExpiringProgressBar(
+                expiresAt: feedback.expiresAt,
+                duration: 1,
+                danger: true
+            )
+        }
+    }
+
+    private var dialogBorder: LinearGradient {
+        switch state {
+        case .declined:
+            return LinearGradient(
+                colors: [
+                    Color.red,
+                    Color.red.opacity(0.35)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        default:
+            return LobbyTheme.primaryGradient
+        }
+    }
+
+    private var dialogLeftGlow: Color {
+        switch state {
+        case .declined:
+            return Color.red.opacity(0.24)
+        default:
+            return LobbyTheme.brightBlue.opacity(0.28)
+        }
+    }
+
+    private var dialogRightGlow: Color {
+        switch state {
+        case .declined:
+            return Color.red.opacity(0.16)
+        default:
+            return LobbyTheme.brightPurple.opacity(0.28)
+        }
+    }
+}
+
+private struct LobbyDialogIcon: View {
+    enum Tone {
+        case primary
+        case success
+        case danger
+    }
+
+    let systemName: String
+    let tone: Tone
+
+    private var fillColor: Color {
+        switch tone {
+        case .primary:
+            return LobbyTheme.brightPurple.opacity(0.11)
+        case .success:
+            return Color.green.opacity(0.11)
+        case .danger:
+            return Color.red.opacity(0.11)
+        }
+    }
+
+    private var iconStyle: AnyShapeStyle {
+        switch tone {
+        case .primary:
+            return AnyShapeStyle(
+                LobbyTheme.primaryGradient
+            )
+        case .success:
+            return AnyShapeStyle(Color.green)
+        case .danger:
+            return AnyShapeStyle(Color.red)
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(fillColor)
+                .frame(width: 88, height: 88)
+
+            Circle()
+                .stroke(
+                    iconStyle,
+                    lineWidth: 1.5
+                )
+                .frame(width: 88, height: 88)
+                .shadow(
+                    color: glowColor.opacity(0.42),
+                    radius: 13
+                )
+
+            Image(systemName: systemName)
+                .font(
+                    .system(
+                        size: 34,
+                        weight: .semibold
+                    )
+                )
+                .foregroundStyle(iconStyle)
+                .contentTransition(.interpolate)
+        }
+    }
+
+    private var glowColor: Color {
+        switch tone {
+        case .primary:
+            return LobbyTheme.brightPurple
+        case .success:
+            return .green
+        case .danger:
+            return .red
+        }
+    }
+}
+
+private struct CountdownDialogVisual: View {
+    let value: Int
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LobbyTheme
+                        .brightPurple
+                        .opacity(0.11)
+                )
+                .frame(width: 104, height: 104)
+
+            Circle()
+                .stroke(
+                    LobbyTheme.primaryGradient,
+                    lineWidth: 2
+                )
+                .frame(width: 104, height: 104)
+                .shadow(
+                    color:
+                        LobbyTheme
+                        .brightBlue
+                        .opacity(0.44),
+                    radius: 15,
+                    x: -4
+                )
+                .shadow(
+                    color:
+                        LobbyTheme
+                        .brightPurple
+                        .opacity(0.44),
+                    radius: 15,
+                    x: 4
+                )
+
+            if value > 0 {
+                Text("\(value)")
+                    .font(
+                        .system(
+                            size: 54,
+                            weight: .black,
+                            design: .rounded
+                        )
+                    )
+                    .foregroundStyle(
+                        LobbyTheme.primaryGradient
+                    )
+                    .contentTransition(.numericText())
+            } else {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.2)
+            }
+        }
+    }
+}
+
+private struct InvitationActionLabel: View {
+    let title: String
+    let systemName: String
+    let isPrimary: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemName)
+                .font(
+                    .system(
+                        size: 14,
+                        weight: .bold
+                    )
+                )
+
+            Text(title)
+        }
+        .font(
+            .system(
+                size: 17,
+                weight: .bold,
+                design: .rounded
+            )
+        )
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .frame(height: 56)
+        .background {
+            RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+            .fill(
+                isPrimary
+                ? LobbyTheme.primaryGradient
+                : LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.075),
+                        Color.white.opacity(0.035)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        }
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+            .stroke(
+                isPrimary
+                ? Color.white.opacity(0.34)
+                : Color.white.opacity(0.14),
+                lineWidth: 1
+            )
+        }
+    }
+}
+
+private struct ExpiringProgressBar: View {
+    let expiresAt: Date
+    let duration: TimeInterval
+    var danger: Bool = false
+
+    var body: some View {
+        TimelineView(
+            .animation(minimumInterval: 0.03)
+        ) { timeline in
+            let remaining = max(
+                expiresAt.timeIntervalSince(
+                    timeline.date
+                ),
+                0
+            )
+
+            let progress = min(
+                max(remaining / max(duration, 0.01), 0),
+                1
+            )
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(
+                            Color.white.opacity(0.08)
+                        )
+
+                    Group {
+                        if danger {
+                            Color.red
+                        } else {
+                            LobbyTheme.primaryGradient
+                        }
+                    }
+                    .frame(
+                        width:
+                            geometry.size.width * progress
+                    )
+                    .clipShape(Capsule())
+                }
+            }
+        }
+    }
+}
+
+private struct IndeterminateDialogProgressBar: View {
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let time = timeline.date
+                .timeIntervalSinceReferenceDate
+            let progress = (time * 0.7)
+                .truncatingRemainder(dividingBy: 1)
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.08))
+
+                    LobbyTheme.primaryGradient
+                        .frame(width: geometry.size.width * 0.34)
+                        .offset(
+                            x:
+                                (geometry.size.width * 1.34) * progress -
+                                geometry.size.width * 0.34
+                        )
+                        .clipShape(Capsule())
+                }
+                .clipShape(Capsule())
+            }
+        }
+    }
+}
+
+private struct CountdownDialogProgressBar: View {
+    let value: Int
+
+    private var progress: CGFloat {
+        switch value {
+        case 3:
+            return 0.25
+        case 2:
+            return 0.50
+        case 1:
+            return 0.75
+        default:
+            return 1
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.white.opacity(0.08))
+
+                LobbyTheme.primaryGradient
+                    .frame(
+                        width: geometry.size.width * progress
+                    )
+                    .clipShape(Capsule())
+            }
+        }
+        .animation(
+            .easeInOut(duration: 0.25),
+            value: value
+        )
     }
 }
 
@@ -1426,6 +2239,7 @@ private struct NearbyPlayerRow: View {
     let peerName: String
     let state: PlayerState
     let accentColor: Color
+    var isReady: Bool = false
     let action: () -> Void
 
     private var initial: String {
@@ -1495,7 +2309,7 @@ private struct NearbyPlayerRow: View {
 
                 Text(
                     state == .connected
-                        ? "Connected"
+                        ? (isReady ? "Ready to play" : "Connected")
                         : "Nearby"
                 )
                 .font(.system(size: 14))
@@ -1508,15 +2322,19 @@ private struct NearbyPlayerRow: View {
 
             if state == .connected {
                 HStack(spacing: 6) {
-                    Image(systemName: "checkmark")
-                        .font(
-                            .system(
-                                size: 12,
-                                weight: .bold
-                            )
+                    Image(
+                        systemName: isReady
+                            ? "checkmark"
+                            : "clock"
+                    )
+                    .font(
+                        .system(
+                            size: 12,
+                            weight: .bold
                         )
+                    )
 
-                    Text("Ready")
+                    Text(isReady ? "Ready" : "Waiting")
                 }
                 .font(
                     .system(
@@ -1524,17 +2342,27 @@ private struct NearbyPlayerRow: View {
                         weight: .semibold
                     )
                 )
-                .foregroundStyle(.green)
+                .foregroundStyle(
+                    isReady
+                        ? Color.green
+                        : Color.white.opacity(0.58)
+                )
                 .padding(.horizontal, 14)
                 .frame(height: 36)
                 .background {
                     Capsule()
-                        .fill(Color.green.opacity(0.09))
+                        .fill(
+                            isReady
+                                ? Color.green.opacity(0.09)
+                                : Color.white.opacity(0.05)
+                        )
                 }
                 .overlay {
                     Capsule()
                         .stroke(
-                            Color.green.opacity(0.25),
+                            isReady
+                                ? Color.green.opacity(0.25)
+                                : Color.white.opacity(0.12),
                             lineWidth: 1
                         )
                 }

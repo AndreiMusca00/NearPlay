@@ -9,6 +9,7 @@ import Foundation
 
 enum NearbyMessageType: String, Codable {
     case lobbyUpdate
+    case lobbyCountdown
     case gameStart
     case gameAction
     case gameState
@@ -27,7 +28,14 @@ struct NearbyMessage: Codable, Identifiable, Hashable {
     let payload: Data?
     let createdAt: Date
 
-    init(id: UUID = UUID(), gameID: String, senderName: String, type: NearbyMessageType, payload: Data? = nil, createdAt: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        gameID: String,
+        senderName: String,
+        type: NearbyMessageType,
+        payload: Data? = nil,
+        createdAt: Date = Date()
+    ) {
         self.id = id
         self.gameID = gameID
         self.senderName = senderName
