@@ -10,23 +10,28 @@ import UIKit
 
 struct RPSView: View {
     let game: Game
-
-    @ObservedObject
-    var nearbyService: NearbyService
+    @ObservedObject var nearbyService: NearbyService
 
     let localPlayerName: String
     let startPayload: RPSStartPayload
     let onExitToHome: () -> Void
 
-    @Environment(\.dismiss)
-    private var dismiss
+    @Environment(\.dismiss) private var dismiss
 
-    @StateObject
-    private var rematchController: RematchController
+    @Namespace private var choiceNamespace
+
+    @StateObject private var rematchController: RematchController
 
     @State private var rpsGame = RPSGame()
+
     @State private var showQuitConfirmation = false
     @State private var isQuitting = false
+
+    @State private var presentationPhase: RPSPresentationPhase = .choosing
+    @State private var duelCardsVisible = false
+    @State private var highlightWinner = false
+    @State private var showResultOverlay = false
+    @State private var revealSequenceID = UUID()
 
     init(
         game: Game,
@@ -41,8 +46,7 @@ struct RPSView: View {
         self.startPayload = startPayload
         self.onExitToHome = onExitToHome
 
-        let remotePlayerID =
-            nearbyService.connectedPeers.first?.id ?? "peer"
+        let remotePlayerID = nearbyService.connectedPeers.first?.id ?? "peer"
 
         let sortedPlayerIDs = [
             nearbyService.localPlayerID,
@@ -77,8 +81,6 @@ struct RPSView: View {
         )
     }
 
-    // MARK: - Body
-
     var body: some View {
         ZStack {
             RPSTheme.background
@@ -93,9 +95,7 @@ struct RPSView: View {
                     VStack(spacing: 22) {
                         roundStatusView
 
-                        battleArena
-
-                        choiceButtonsSection
+                        stageSection
 
                         connectionStatusView
                     }
@@ -106,7 +106,7 @@ struct RPSView: View {
                 .scrollIndicators(.hidden)
             }
 
-            if rpsGame.isRoundComplete {
+            if rpsGame.isRoundComplete && showResultOverlay {
                 GameResultOverlay(
                     result: localRoundResult,
                     title: resultTitle,
@@ -118,8 +118,6 @@ struct RPSView: View {
                         rematchController.performPrimaryAction()
                     },
                     onQuit: {
-                        // Din dialogul final ieșim direct,
-                        // fără încă o confirmare.
                         quitGame()
                     }
                 )
@@ -138,30 +136,18 @@ struct RPSView: View {
             "Quit game?",
             isPresented: $showQuitConfirmation
         ) {
-            Button(
-                "Quit Game",
-                role: .destructive
-            ) {
+            Button("Quit Game", role: .destructive) {
                 quitGame()
             }
 
-            Button(
-                "Cancel",
-                role: .cancel
-            ) {}
+            Button("Cancel", role: .cancel) { }
         } message: {
-            Text(
-                "You and your opponent will return to the main screen."
-            )
+            Text("You and your opponent will return to the main screen.")
         }
-        .onReceive(
-            nearbyService.$lastReceivedMessage
-        ) { message in
+        .onReceive(nearbyService.$lastReceivedMessage) { message in
             handleIncoming(message)
         }
-        .onChange(
-            of: rematchController.confirmedRoundNumber
-        ) { _, confirmedRound in
+        .onChange(of: rematchController.confirmedRoundNumber) { _, confirmedRound in
             guard confirmedRound != nil else {
                 return
             }
@@ -173,9 +159,13 @@ struct RPSView: View {
                 )
             ) {
                 rpsGame.reset()
+                resetPresentationState()
             }
 
             rematchController.finishStartingRound()
+        }
+        .onAppear {
+            resetPresentationState()
         }
     }
 
@@ -187,12 +177,7 @@ struct RPSView: View {
                 showQuitConfirmation = true
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(
-                        .system(
-                            size: 20,
-                            weight: .semibold
-                        )
-                    )
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 48, height: 48)
                     .background {
@@ -201,10 +186,7 @@ struct RPSView: View {
                     }
                     .overlay {
                         Circle()
-                            .stroke(
-                                Color.white.opacity(0.12),
-                                lineWidth: 1
-                            )
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
                     }
             }
             .buttonStyle(.plain)
@@ -214,24 +196,13 @@ struct RPSView: View {
 
             VStack(spacing: 3) {
                 Text(game.title)
-                    .font(
-                        .system(
-                            size: 23,
-                            weight: .bold,
-                            design: .rounded
-                        )
-                    )
+                    .font(.system(size: 23, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
                 Text(headerSubtitle)
-                    .font(
-                        .system(
-                            size: 13,
-                            weight: .medium
-                        )
-                    )
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(headerSubtitleColor)
                     .lineLimit(1)
             }
@@ -244,10 +215,7 @@ struct RPSView: View {
                     .frame(width: 48, height: 48)
 
                 Circle()
-                    .stroke(
-                        Color.white.opacity(0.12),
-                        lineWidth: 1
-                    )
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
                     .frame(width: 48, height: 48)
 
                 Image(
@@ -256,12 +224,7 @@ struct RPSView: View {
                         ? "wifi.slash"
                         : "wifi"
                 )
-                .font(
-                    .system(
-                        size: 18,
-                        weight: .semibold
-                    )
-                )
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(
                     nearbyService.connectedPeers.isEmpty
                         ? Color.orange
@@ -272,40 +235,55 @@ struct RPSView: View {
     }
 
     private var headerSubtitle: String {
-        switch rpsGame.result {
-        case .waiting:
-            if rpsGame.localChoice == nil {
-                return "Choose your move"
+        if rpsGame.isRoundComplete {
+            switch rpsGame.result {
+            case .draw:
+                return "Round draw"
+            case .localWin:
+                return "You won the round"
+            case .remoteWin:
+                return "\(remotePlayerName) won the round"
+            case .waiting:
+                return "Round finished"
             }
+        }
 
-            return "Choice locked"
+        switch presentationPhase {
+        case .choosing:
+            if rpsGame.remoteChoice != nil {
+                return "\(remotePlayerName) is ready — choose your move"
+            }
+            return "Choose your move"
 
-        case .draw:
-            return "Round draw"
+        case .lockedSelection:
+            return "Waiting for \(remotePlayerName)"
 
-        case .localWin:
-            return "You won the round"
-
-        case .remoteWin:
-            return "\(remotePlayerName) won the round"
+        case .duel, .finished:
+            return "Revealing both choices"
         }
     }
 
     private var headerSubtitleColor: Color {
-        switch rpsGame.result {
-        case .waiting:
-            return rpsGame.localChoice == nil
-                ? RPSTheme.brightBlue
-                : RPSTheme.brightPurple
+        if rpsGame.isRoundComplete {
+            switch rpsGame.result {
+            case .draw:
+                return Color.white.opacity(0.58)
+            case .localWin:
+                return Color.green.opacity(0.90)
+            case .remoteWin:
+                return Color.red.opacity(0.86)
+            case .waiting:
+                return Color.white.opacity(0.58)
+            }
+        }
 
-        case .draw:
-            return Color.white.opacity(0.56)
-
-        case .localWin:
-            return Color.green.opacity(0.90)
-
-        case .remoteWin:
-            return Color.red.opacity(0.86)
+        switch presentationPhase {
+        case .choosing:
+            return RPSTheme.brightBlue
+        case .lockedSelection:
+            return RPSTheme.brightPurple
+        case .duel, .finished:
+            return Color.white.opacity(0.60)
         }
     }
 
@@ -314,72 +292,26 @@ struct RPSView: View {
     private var roundStatusView: some View {
         HStack(spacing: 10) {
             Image(systemName: roundStatusIcon)
-                .font(
-                    .system(
-                        size: 15,
-                        weight: .semibold
-                    )
-                )
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(roundStatusColor)
 
             Text(roundStatusText)
-                .font(
-                    .system(
-                        size: 15,
-                        weight: .semibold
-                    )
-                )
-                .foregroundStyle(
-                    Color.white.opacity(0.72)
-                )
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.72))
 
             Spacer()
 
-            if !rpsGame.isRoundComplete {
-                Text("1 vs 1")
-                    .font(
-                        .system(
-                            size: 13,
-                            weight: .bold,
-                            design: .rounded
-                        )
-                    )
-                    .foregroundStyle(
-                        RPSTheme.primaryGradient
-                    )
-                    .padding(.horizontal, 11)
-                    .frame(height: 28)
-                    .background {
-                        Capsule()
-                            .fill(Color.white.opacity(0.045))
-                    }
-                    .overlay {
-                        Capsule()
-                            .stroke(
-                                Color.white.opacity(0.09),
-                                lineWidth: 1
-                            )
-                    }
-            }
+            statusPill
         }
         .padding(.horizontal, 16)
-        .frame(height: 50)
+        .frame(height: 52)
         .background {
-            RoundedRectangle(
-                cornerRadius: 16,
-                style: .continuous
-            )
-            .fill(Color.white.opacity(0.028))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.028))
         }
         .overlay {
-            RoundedRectangle(
-                cornerRadius: 16,
-                style: .continuous
-            )
-            .stroke(
-                Color.white.opacity(0.09),
-                lineWidth: 1
-            )
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.09), lineWidth: 1)
         }
     }
 
@@ -397,19 +329,22 @@ struct RPSView: View {
             }
         }
 
-        if rpsGame.localChoice == nil {
-            if rpsGame.remoteChoice == nil {
-                return "Choose rock, paper or scissors"
+        switch presentationPhase {
+        case .choosing:
+            if rpsGame.remoteChoice != nil {
+                return "\(remotePlayerName) is ready — choose your move"
             }
+            return "Choose rock, paper or scissors"
 
-            return "\(remotePlayerName) is ready — choose your move"
+        case .lockedSelection:
+            return "Choice locked — waiting for \(remotePlayerName)"
+
+        case .duel, .finished:
+            if highlightWinner {
+                return duelSummaryText
+            }
+            return "Revealing both choices"
         }
-
-        if rpsGame.remoteChoice == nil {
-            return "Waiting for \(remotePlayerName)"
-        }
-
-        return "Revealing both choices"
     }
 
     private var roundStatusIcon: String {
@@ -426,11 +361,14 @@ struct RPSView: View {
             }
         }
 
-        if rpsGame.localChoice != nil {
+        switch presentationPhase {
+        case .choosing:
+            return "hand.tap.fill"
+        case .lockedSelection:
             return "lock.fill"
+        case .duel, .finished:
+            return "sparkles"
         }
-
-        return "hand.tap.fill"
     }
 
     private var roundStatusColor: Color {
@@ -447,144 +385,349 @@ struct RPSView: View {
             }
         }
 
-        return rpsGame.localChoice == nil
-            ? RPSTheme.brightBlue
-            : RPSTheme.brightPurple
-    }
-
-    // MARK: - Battle arena
-
-    private var battleArena: some View {
-        HStack(spacing: 10) {
-            RPSPlayerChoiceCard(
-                playerName: localPlayerName,
-                playerLabel: "You",
-                choice: rpsGame.localChoice,
-                choiceIsHidden: false,
-                hasLockedChoice: rpsGame.localChoice != nil,
-                accentColor: choiceAccentColor(
-                    rpsGame.localChoice
-                ),
-                isWinner: didLocalPlayerWin
-            )
-
-            versusBadge
-
-            RPSPlayerChoiceCard(
-                playerName: remotePlayerName,
-                playerLabel: "Opponent",
-                choice:
-                    shouldRevealChoices
-                    ? rpsGame.remoteChoice
-                    : nil,
-                choiceIsHidden:
-                    !shouldRevealChoices &&
-                    rpsGame.remoteChoice != nil,
-                hasLockedChoice:
-                    rpsGame.remoteChoice != nil,
-                accentColor: choiceAccentColor(
-                    shouldRevealChoices
-                        ? rpsGame.remoteChoice
-                        : nil
-                ),
-                isWinner: didRemotePlayerWin
-            )
+        switch presentationPhase {
+        case .choosing:
+            return RPSTheme.brightBlue
+        case .lockedSelection:
+            return RPSTheme.brightPurple
+        case .duel, .finished:
+            return Color.white.opacity(0.72)
         }
     }
 
-    private var versusBadge: some View {
-        ZStack {
-            Circle()
-                .fill(RPSTheme.backgroundBottom)
-                .frame(width: 42, height: 42)
+    @ViewBuilder
+    private var statusPill: some View {
+        if let localChoice = rpsGame.localChoice, !rpsGame.isRoundComplete {
+            HStack(spacing: 6) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 11, weight: .bold))
 
-            Circle()
-                .stroke(
-                    RPSTheme.primaryGradient,
-                    lineWidth: 1.4
-                )
-                .frame(width: 42, height: 42)
-                .shadow(
-                    color: RPSTheme.brightPurple.opacity(0.34),
-                    radius: 8
-                )
-
-            Text("VS")
-                .font(
-                    .system(
-                        size: 12,
-                        weight: .black,
-                        design: .rounded
-                    )
-                )
-                .foregroundStyle(.white)
+                Text(localChoice.title)
+            }
+            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .foregroundStyle(choiceAccentColor(localChoice))
+            .padding(.horizontal, 11)
+            .frame(height: 28)
+            .background {
+                Capsule()
+                    .fill(Color.white.opacity(0.045))
+            }
+            .overlay {
+                Capsule()
+                    .stroke(Color.white.opacity(0.09), lineWidth: 1)
+            }
+        } else if !rpsGame.isRoundComplete {
+            Text("1 vs 1")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(RPSTheme.primaryGradient)
+                .padding(.horizontal, 11)
+                .frame(height: 28)
+                .background {
+                    Capsule()
+                        .fill(Color.white.opacity(0.045))
+                }
+                .overlay {
+                    Capsule()
+                        .stroke(Color.white.opacity(0.09), lineWidth: 1)
+                }
         }
-        .frame(width: 34)
-        .zIndex(2)
     }
 
-    // MARK: - Choices
+    // MARK: - Main stage
 
-    private var choiceButtonsSection: some View {
-        VStack(spacing: 14) {
+    private var stageSection: some View {
+        VStack(spacing: 16) {
             HStack {
-                Text("Choose Your Move")
-                    .font(
-                        .system(
-                            size: 20,
-                            weight: .bold,
-                            design: .rounded
-                        )
-                    )
+                Text(stageTitle)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
                 Spacer()
 
                 if let localChoice = rpsGame.localChoice {
-                    HStack(spacing: 6) {
-                        Image(systemName: "lock.fill")
-                            .font(
-                                .system(
-                                    size: 11,
-                                    weight: .bold
-                                )
-                            )
+                    Text(localChoice.emoji)
+                        .font(.system(size: 26))
+                }
+            }
 
-                        Text(localChoice.title)
-                    }
-                    .font(
-                        .system(
-                            size: 13,
-                            weight: .semibold
+            ZStack {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.035),
+                                Color.white.opacity(0.015)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
                     )
-                    .foregroundStyle(
-                        choiceAccentColor(localChoice)
+
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+
+                stageContent
+                    .padding(18)
+            }
+            .frame(minHeight: 340)
+        }
+    }
+
+    private var stageTitle: String {
+        switch presentationPhase {
+        case .choosing:
+            return "Choose Your Move"
+        case .lockedSelection:
+            return "Choice Locked"
+        case .duel, .finished:
+            return "Battle Reveal"
+        }
+    }
+
+    @ViewBuilder
+    private var stageContent: some View {
+        switch presentationPhase {
+        case .choosing:
+            choosingStage
+
+        case .lockedSelection:
+            lockedChoiceStage
+
+        case .duel, .finished:
+            duelStage
+        }
+    }
+
+    private var choosingStage: some View {
+        VStack(spacing: 16) {
+            LazyVGrid(
+                columns: Array(
+                    repeating: GridItem(.flexible(), spacing: 12),
+                    count: 3
+                ),
+                spacing: 12
+            ) {
+                ForEach(RPSChoice.allCases) { choice in
+                    Button {
+                        choose(choice)
+                    } label: {
+                        RPSSelectableChoiceCard(
+                            choice: choice,
+                            accentColor: choiceAccentColor(choice),
+                            subtitle: "Choose",
+                            isEmphasized: false
+                        )
+                        .matchedGeometryEffect(
+                            id: localChoiceAnimationID(for: choice),
+                            in: choiceNamespace
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canChoose)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.94)),
+                            removal: .opacity.combined(with: .scale(scale: 0.88))
+                        )
                     )
                 }
             }
 
-            LazyVGrid(
-                columns: Array(
-                    repeating: GridItem(
-                        .flexible(),
-                        spacing: 10
-                    ),
-                    count: 3
-                ),
-                spacing: 10
-            ) {
-                ForEach(RPSChoice.allCases) { choice in
-                    RPSChoiceButton(
-                        choice: choice,
-                        accentColor: choiceAccentColor(choice),
-                        isSelected: isSelected(choice),
-                        isEnabled: canChoose
-                    ) {
-                        choose(choice)
-                    }
+            Text(
+                rpsGame.remoteChoice == nil
+                    ? "Pick one move to lock your choice."
+                    : "\(remotePlayerName) is already ready. Pick your move to reveal the round."
+            )
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.48))
+            .multilineTextAlignment(.center)
+        }
+    }
+
+    @ViewBuilder
+    private var lockedChoiceStage: some View {
+        if let localChoice = rpsGame.localChoice {
+            VStack(spacing: 18) {
+                Spacer(minLength: 0)
+
+                RPSSelectableChoiceCard(
+                    choice: localChoice,
+                    accentColor: choiceAccentColor(localChoice),
+                    subtitle: "Locked",
+                    isEmphasized: true
+                )
+                .matchedGeometryEffect(
+                    id: localChoiceAnimationID(for: localChoice),
+                    in: choiceNamespace
+                )
+                .frame(maxWidth: 240)
+                .shadow(
+                    color: choiceAccentColor(localChoice).opacity(0.28),
+                    radius: 18
+                )
+
+                VStack(spacing: 8) {
+                    Text("Waiting for \(remotePlayerName)...")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+
+                    Text("Your move is locked in.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.46))
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        }
+    }
+
+    private var duelStage: some View {
+        VStack(spacing: 20) {
+            Spacer(minLength: 0)
+
+            HStack(spacing: 14) {
+                if let localChoice = rpsGame.localChoice {
+                    RPSDuelChoiceCard(
+                        title: localPlayerName,
+                        choice: localChoice,
+                        accentColor: choiceAccentColor(localChoice),
+                        isWinner: didLocalPlayerWin,
+                        isDimmed: didRemotePlayerWin && highlightWinner
+                    )
+                    .matchedGeometryEffect(
+                        id: localChoiceAnimationID(for: localChoice),
+                        in: choiceNamespace
+                    )
+                    .scaleEffect(localDuelScale)
+                    .opacity(duelCardsVisible ? 1 : 0)
+                    .offset(
+                        x: duelCardsVisible ? 0 : -120,
+                        y: duelCardsVisible ? 0 : 12
+                    )
+                }
+
+                ZStack {
+                    Circle()
+                        .fill(RPSTheme.backgroundBottom)
+                        .frame(width: 58, height: 58)
+
+                    Circle()
+                        .stroke(RPSTheme.primaryGradient, lineWidth: 1.6)
+                        .frame(width: 58, height: 58)
+                        .shadow(
+                            color: RPSTheme.brightPurple.opacity(0.34),
+                            radius: 10
+                        )
+
+                    Text("VS")
+                        .font(.system(size: 17, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+                .scaleEffect(duelCardsVisible ? 1 : 0.72)
+                .opacity(duelCardsVisible ? 1 : 0)
+
+                if let remoteChoice = rpsGame.remoteChoice {
+                    RPSDuelChoiceCard(
+                        title: remotePlayerName,
+                        choice: remoteChoice,
+                        accentColor: choiceAccentColor(remoteChoice),
+                        isWinner: didRemotePlayerWin,
+                        isDimmed: didLocalPlayerWin && highlightWinner
+                    )
+                    .scaleEffect(remoteDuelScale)
+                    .opacity(duelCardsVisible ? 1 : 0)
+                    .offset(
+                        x: duelCardsVisible ? 0 : 120,
+                        y: duelCardsVisible ? 0 : 12
+                    )
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+            .animation(
+                .spring(response: 0.42, dampingFraction: 0.84),
+                value: duelCardsVisible
+            )
+            .animation(
+                .spring(response: 0.32, dampingFraction: 0.82),
+                value: highlightWinner
+            )
+
+            VStack(spacing: 8) {
+                Text(duelHeadlineText)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+
+                Text(duelSubheadlineText)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.48))
+                    .multilineTextAlignment(.center)
+            }
+            .opacity(duelCardsVisible ? 1 : 0)
+            .offset(y: duelCardsVisible ? 0 : 12)
+            .animation(
+                .easeOut(duration: 0.28),
+                value: duelCardsVisible
+            )
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .transition(.opacity)
+    }
+
+    private var localDuelScale: CGFloat {
+        guard highlightWinner else { return 1.0 }
+        if didLocalPlayerWin { return 1.08 }
+        if didRemotePlayerWin { return 0.94 }
+        return 1.0
+    }
+
+    private var remoteDuelScale: CGFloat {
+        guard highlightWinner else { return 1.0 }
+        if didRemotePlayerWin { return 1.08 }
+        if didLocalPlayerWin { return 0.94 }
+        return 1.0
+    }
+
+    private var duelHeadlineText: String {
+        if !highlightWinner {
+            return "Moves Revealed"
+        }
+
+        switch localRoundResult {
+        case .win:
+            return "You Win!"
+        case .loss:
+            return "You Lose"
+        case .draw:
+            return "It's a Draw!"
+        }
+    }
+
+    private var duelSubheadlineText: String {
+        if !highlightWinner {
+            return "Let’s see who takes the round."
+        }
+
+        return duelSummaryText
+    }
+
+    private var duelSummaryText: String {
+        guard let localChoice = rpsGame.localChoice,
+              let remoteChoice = rpsGame.remoteChoice else {
+            return "The round has ended."
+        }
+
+        switch localRoundResult {
+        case .win:
+            return "\(localChoice.title) beats \(remoteChoice.title)."
+        case .loss:
+            return "\(remoteChoice.title) beats \(localChoice.title)."
+        case .draw:
+            return "You both chose \(localChoice.title)."
         }
     }
 
@@ -609,36 +752,20 @@ struct RPSView: View {
                     ? "Opponent disconnected"
                     : "Connected to \(remotePlayerName)"
             )
-            .font(
-                .system(
-                    size: 14,
-                    weight: .medium
-                )
-            )
-            .foregroundStyle(
-                Color.white.opacity(0.55)
-            )
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.55))
 
             Spacer()
         }
         .padding(.horizontal, 15)
         .frame(height: 48)
         .background {
-            RoundedRectangle(
-                cornerRadius: 16,
-                style: .continuous
-            )
-            .fill(Color.white.opacity(0.022))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.022))
         }
         .overlay {
-            RoundedRectangle(
-                cornerRadius: 16,
-                style: .continuous
-            )
-            .stroke(
-                Color.white.opacity(0.08),
-                lineWidth: 1
-            )
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
         }
     }
 
@@ -655,43 +782,28 @@ struct RPSView: View {
                     .scaleEffect(1.15)
 
                 Text("Leaving game…")
-                    .font(
-                        .system(
-                            size: 16,
-                            weight: .semibold
-                        )
-                    )
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
             }
             .padding(.horizontal, 30)
             .padding(.vertical, 24)
             .background {
-                RoundedRectangle(
-                    cornerRadius: 22,
-                    style: .continuous
-                )
-                .fill(RPSTheme.cardBackground)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(RPSTheme.cardBackground)
             }
             .overlay {
-                RoundedRectangle(
-                    cornerRadius: 22,
-                    style: .continuous
-                )
-                .stroke(
-                    RPSTheme.primaryGradient,
-                    lineWidth: 1.2
-                )
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(RPSTheme.primaryGradient, lineWidth: 1.2)
             }
         }
     }
 
-    // MARK: - Game state
+    // MARK: - Game state helpers
 
     private var remotePlayerName: String {
         if startPayload.playerOneName == localPlayerName {
             return startPayload.playerTwoName
         }
-
         return startPayload.playerOneName
     }
 
@@ -700,16 +812,10 @@ struct RPSView: View {
         !rpsGame.isRoundComplete
     }
 
-    private var shouldRevealChoices: Bool {
-        rpsGame.localChoice != nil &&
-        rpsGame.remoteChoice != nil
-    }
-
     private var didLocalPlayerWin: Bool {
         if case .localWin = rpsGame.result {
             return true
         }
-
         return false
     }
 
@@ -717,21 +823,14 @@ struct RPSView: View {
         if case .remoteWin = rpsGame.result {
             return true
         }
-
         return false
     }
 
-    private func isSelected(
-        _ choice: RPSChoice
-    ) -> Bool {
-        guard let selectedChoice = rpsGame.localChoice else {
-            return false
-        }
-
-        return selectedChoice.id == choice.id
+    private func localChoiceAnimationID(for choice: RPSChoice) -> String {
+        "local-choice-\(choice.title)"
     }
 
-    // MARK: - Result
+    // MARK: - Result overlay data
 
     private var localRoundResult: GameRoundResult {
         switch rpsGame.result {
@@ -766,10 +865,8 @@ struct RPSView: View {
         switch localRoundResult {
         case .win:
             return "\(localChoice.title) beats \(remoteChoice.title)."
-
         case .loss:
             return "\(remoteChoice.title) beats \(localChoice.title)."
-
         case .draw:
             return "You both chose \(localChoice.title)."
         }
@@ -778,15 +875,9 @@ struct RPSView: View {
     private var resultSymbolName: String {
         switch localRoundResult {
         case .win:
-            return choiceSymbolName(
-                rpsGame.localChoice
-            )
-
+            return choiceSymbolName(rpsGame.localChoice)
         case .loss:
-            return choiceSymbolName(
-                rpsGame.remoteChoice
-            )
-
+            return choiceSymbolName(rpsGame.remoteChoice)
         case .draw:
             return "equal"
         }
@@ -795,15 +886,9 @@ struct RPSView: View {
     private var resultAccentColor: Color {
         switch localRoundResult {
         case .win:
-            return choiceAccentColor(
-                rpsGame.localChoice
-            )
-
+            return choiceAccentColor(rpsGame.localChoice)
         case .loss:
-            return choiceAccentColor(
-                rpsGame.remoteChoice
-            )
-
+            return choiceAccentColor(rpsGame.remoteChoice)
         case .draw:
             return RPSTheme.brightPurple
         }
@@ -811,26 +896,20 @@ struct RPSView: View {
 
     // MARK: - Actions
 
-    private func choose(
-        _ choice: RPSChoice
-    ) {
+    private func choose(_ choice: RPSChoice) {
         guard canChoose else {
             return
         }
 
         withAnimation(
-            .spring(
-                response: 0.34,
-                dampingFraction: 0.78
-            )
+            .spring(response: 0.38, dampingFraction: 0.82)
         ) {
             rpsGame.setLocalChoice(choice)
+            presentationPhase = .lockedSelection
         }
 
-        UIImpactFeedbackGenerator(
-            style: .medium
-        )
-        .impactOccurred()
+        UIImpactFeedbackGenerator(style: .medium)
+            .impactOccurred()
 
         let payload = RPSChoicePayload(
             playerName: localPlayerName,
@@ -838,8 +917,7 @@ struct RPSView: View {
         )
 
         do {
-            let data = try JSONEncoder()
-                .encode(payload)
+            let data = try JSONEncoder().encode(payload)
 
             let message = NearbyMessage(
                 gameID: game.id,
@@ -849,12 +927,87 @@ struct RPSView: View {
             )
 
             nearbyService.send(message)
-            gameResultHapticIfNeeded()
         } catch {
-            print(
-                "Failed to encode RPS choice: \(error)"
-            )
+            print("Failed to encode RPS choice: \(error)")
         }
+
+        if rpsGame.remoteChoice != nil {
+            startRevealSequence(after: 0.20)
+        }
+    }
+
+    private func startRevealSequence(after delay: TimeInterval) {
+        guard rpsGame.localChoice != nil,
+              rpsGame.remoteChoice != nil,
+              !showResultOverlay else {
+            return
+        }
+
+        if presentationPhase == .duel || presentationPhase == .finished {
+            return
+        }
+
+        let sequenceID = UUID()
+        revealSequenceID = sequenceID
+
+        duelCardsVisible = false
+        highlightWinner = false
+        showResultOverlay = false
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard revealSequenceID == sequenceID,
+                  rpsGame.localChoice != nil,
+                  rpsGame.remoteChoice != nil else {
+                return
+            }
+
+            withAnimation(
+                .spring(response: 0.42, dampingFraction: 0.84)
+            ) {
+                presentationPhase = .duel
+                duelCardsVisible = true
+            }
+
+            UIImpactFeedbackGenerator(style: .soft)
+                .impactOccurred()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                guard revealSequenceID == sequenceID,
+                      rpsGame.isRoundComplete else {
+                    return
+                }
+
+                withAnimation(
+                    .spring(response: 0.34, dampingFraction: 0.84)
+                ) {
+                    highlightWinner = true
+                }
+
+                gameResultHapticIfNeeded()
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+                    guard revealSequenceID == sequenceID,
+                          rpsGame.isRoundComplete else {
+                        return
+                    }
+
+                    withAnimation(
+                        .spring(response: 0.40, dampingFraction: 0.84)
+                    ) {
+                        showResultOverlay = true
+                        presentationPhase = .finished
+                    }
+                }
+            }
+        }
+    }
+
+    private func resetPresentationState() {
+        revealSequenceID = UUID()
+        presentationPhase = .choosing
+        duelCardsVisible = false
+        highlightWinner = false
+        showResultOverlay = false
     }
 
     private func quitGame() {
@@ -869,8 +1022,7 @@ struct RPSView: View {
             reason: "quit"
         )
 
-        let data = try? JSONEncoder()
-            .encode(payload)
+        let data = try? JSONEncoder().encode(payload)
 
         let message = NearbyMessage(
             gameID: game.id,
@@ -881,25 +1033,17 @@ struct RPSView: View {
 
         nearbyService.send(message)
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.4
-        ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             nearbyService.stop()
-
-            // Păstrat pentru navigarea corectă:
-            // închide jocul, apoi lobby-ul.
             dismiss()
             onExitToHome()
-
             isQuitting = false
         }
     }
 
     // MARK: - Incoming messages
 
-    private func handleIncoming(
-        _ message: NearbyMessage?
-    ) {
+    private func handleIncoming(_ message: NearbyMessage?) {
         guard let message,
               message.gameID == game.id else {
             return
@@ -921,9 +1065,7 @@ struct RPSView: View {
         }
     }
 
-    private func handleChoiceMessage(
-        _ message: NearbyMessage
-    ) {
+    private func handleChoiceMessage(_ message: NearbyMessage) {
         guard message.senderName != localPlayerName,
               let data = message.payload else {
             return
@@ -935,34 +1077,27 @@ struct RPSView: View {
                 from: data
             )
 
+            let hadLocalChoice = rpsGame.localChoice != nil
+
             withAnimation(
-                .spring(
-                    response: 0.34,
-                    dampingFraction: 0.78
-                )
+                .spring(response: 0.34, dampingFraction: 0.80)
             ) {
-                rpsGame.setRemoteChoice(
-                    payload.choice
-                )
+                rpsGame.setRemoteChoice(payload.choice)
             }
 
-            UIImpactFeedbackGenerator(
-                style: .soft
-            )
-            .impactOccurred()
+            UIImpactFeedbackGenerator(style: .soft)
+                .impactOccurred()
 
-            gameResultHapticIfNeeded()
+            if hadLocalChoice {
+                startRevealSequence(after: 0.18)
+            }
         } catch {
-            print(
-                "Failed to decode RPS choice: \(error)"
-            )
+            print("Failed to decode RPS choice: \(error)")
         }
     }
 
     private func handleOpponentQuit() {
         nearbyService.stop()
-
-        // Păstrat exact pentru navigarea corectă.
         dismiss()
         onExitToHome()
     }
@@ -972,9 +1107,7 @@ struct RPSView: View {
             return
         }
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.15
-        ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             switch localRoundResult {
             case .win:
                 UINotificationFeedbackGenerator()
@@ -993,9 +1126,7 @@ struct RPSView: View {
 
     // MARK: - Choice helpers
 
-    private func choiceSymbolName(
-        _ choice: RPSChoice?
-    ) -> String {
+    private func choiceSymbolName(_ choice: RPSChoice?) -> String {
         guard let choice else {
             return "questionmark"
         }
@@ -1003,21 +1134,16 @@ struct RPSView: View {
         switch choice.title.lowercased() {
         case "rock":
             return "circle.fill"
-
         case "paper":
             return "doc.fill"
-
         case "scissors":
             return "scissors"
-
         default:
             return "hand.raised.fill"
         }
     }
 
-    private func choiceAccentColor(
-        _ choice: RPSChoice?
-    ) -> Color {
+    private func choiceAccentColor(_ choice: RPSChoice?) -> Color {
         guard let choice else {
             return Color.white.opacity(0.50)
         }
@@ -1025,310 +1151,166 @@ struct RPSView: View {
         switch choice.title.lowercased() {
         case "rock":
             return RPSTheme.rockBlue
-
         case "paper":
             return RPSTheme.paperPurple
-
         case "scissors":
             return RPSTheme.scissorsPink
-
         default:
             return RPSTheme.brightPurple
         }
     }
 }
 
-// MARK: - Player choice card
+// MARK: - Presentation phase
 
-private struct RPSPlayerChoiceCard: View {
-    let playerName: String
-    let playerLabel: String
-    let choice: RPSChoice?
-    let choiceIsHidden: Bool
-    let hasLockedChoice: Bool
+private enum RPSPresentationPhase {
+    case choosing
+    case lockedSelection
+    case duel
+    case finished
+}
+
+// MARK: - Choice card used for grid + selected state
+
+private struct RPSSelectableChoiceCard: View {
+    let choice: RPSChoice
     let accentColor: Color
-    let isWinner: Bool
-
-    private var choiceTitle: String {
-        if choiceIsHidden {
-            return "Choice locked"
-        }
-
-        if let choice {
-            return choice.title
-        }
-
-        return hasLockedChoice
-            ? "Ready"
-            : "Waiting"
-    }
-
-    private var displayEmoji: String {
-        if choiceIsHidden {
-            return "?"
-        }
-
-        return choice?.emoji ?? "?"
-    }
+    let subtitle: String
+    let isEmphasized: Bool
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 7) {
-                Text(playerLabel.uppercased())
-                    .font(
-                        .system(
-                            size: 11,
-                            weight: .bold,
-                            design: .rounded
-                        )
-                    )
-                    .foregroundStyle(
-                        Color.white.opacity(0.42)
-                    )
-
-                Spacer()
-
-                if isWinner {
-                    Image(systemName: "crown.fill")
-                        .font(
-                            .system(
-                                size: 13,
-                                weight: .semibold
-                            )
-                        )
-                        .foregroundStyle(.yellow)
-                } else if hasLockedChoice {
-                    Image(systemName: "lock.fill")
-                        .font(
-                            .system(
-                                size: 11,
-                                weight: .semibold
-                            )
-                        )
-                        .foregroundStyle(
-                            accentColor.opacity(0.85)
-                        )
-                }
-            }
-
             ZStack {
                 Circle()
-                    .fill(accentColor.opacity(0.10))
-                    .frame(width: 82, height: 82)
-
-                Circle()
-                    .stroke(
-                        accentColor.opacity(
-                            hasLockedChoice ? 0.72 : 0.22
-                        ),
-                        lineWidth: 1.4
-                    )
-                    .frame(width: 82, height: 82)
-                    .shadow(
-                        color:
-                            hasLockedChoice
-                            ? accentColor.opacity(0.42)
-                            : .clear,
-                        radius: 11
+                    .fill(accentColor.opacity(isEmphasized ? 0.18 : 0.10))
+                    .frame(
+                        width: isEmphasized ? 92 : 76,
+                        height: isEmphasized ? 92 : 76
                     )
 
-                Text(displayEmoji)
-                    .font(
-                        .system(
-                            size: choiceIsHidden ? 43 : 48,
-                            weight: .bold,
-                            design: .rounded
-                        )
-                    )
-                    .foregroundStyle(
-                        choiceIsHidden
-                            ? accentColor
-                            : Color.white
-                    )
+                Text(choice.emoji)
+                    .font(.system(size: isEmphasized ? 52 : 40))
             }
 
-            VStack(spacing: 4) {
-                Text(playerName)
-                    .font(
-                        .system(
-                            size: 16,
-                            weight: .semibold
-                        )
-                    )
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+            Text(choice.title)
+                .font(.system(size: isEmphasized ? 22 : 18, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
 
-                Text(choiceTitle)
-                    .font(
-                        .system(
-                            size: 13,
-                            weight: .medium
-                        )
-                    )
-                    .foregroundStyle(
-                        hasLockedChoice
-                            ? accentColor
-                            : Color.white.opacity(0.40)
-                    )
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
+            Text(subtitle)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isEmphasized ? accentColor : Color.white.opacity(0.40))
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 15)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 202)
+        .frame(height: isEmphasized ? 220 : 166)
         .background {
-            RoundedRectangle(
-                cornerRadius: 24,
-                style: .continuous
-            )
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(
-                            hasLockedChoice ? 0.050 : 0.026
-                        ),
-                        Color.white.opacity(0.014)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-        }
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: 24,
-                style: .continuous
-            )
-            .stroke(
-                hasLockedChoice
-                    ? accentColor.opacity(0.50)
-                    : Color.white.opacity(0.09),
-                lineWidth: hasLockedChoice ? 1.3 : 1
-            )
-        }
-        .shadow(
-            color:
-                hasLockedChoice
-                ? accentColor.opacity(0.18)
-                : .clear,
-            radius: 14
-        )
-    }
-}
-
-// MARK: - Choice button
-
-private struct RPSChoiceButton: View {
-    let choice: RPSChoice
-    let accentColor: Color
-    let isSelected: Bool
-    let isEnabled: Bool
-    let action: () -> Void
-
-    private var opacity: Double {
-        if isEnabled || isSelected {
-            return 1
-        }
-
-        return 0.42
-    }
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            accentColor.opacity(
-                                isSelected ? 0.18 : 0.09
-                            )
-                        )
-                        .frame(width: 62, height: 62)
-
-                    Text(choice.emoji)
-                        .font(.system(size: 36))
-                }
-
-                Text(choice.title)
-                    .font(
-                        .system(
-                            size: 15,
-                            weight: .bold,
-                            design: .rounded
-                        )
-                    )
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.76)
-
-                Text(
-                    isSelected
-                        ? "Locked"
-                        : "Choose"
-                )
-                .font(
-                    .system(
-                        size: 11,
-                        weight: .semibold
-                    )
-                )
-                .foregroundStyle(
-                    isSelected
-                        ? accentColor
-                        : Color.white.opacity(0.38)
-                )
-            }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity)
-            .frame(height: 126)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: 21,
-                    style: .continuous
-                )
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            accentColor.opacity(
-                                isSelected ? 0.14 : 0.045
-                            ),
+                            accentColor.opacity(isEmphasized ? 0.14 : 0.055),
                             Color.white.opacity(0.018)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-            }
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: 21,
-                    style: .continuous
-                )
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(
-                    isSelected
+                    isEmphasized
                         ? accentColor.opacity(0.88)
                         : Color.white.opacity(0.10),
-                    lineWidth: isSelected ? 1.5 : 1
+                    lineWidth: isEmphasized ? 1.5 : 1
                 )
-            }
-            .shadow(
-                color:
-                    isSelected
-                    ? accentColor.opacity(0.30)
-                    : .clear,
-                radius: 12
-            )
-            .opacity(opacity)
         }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .accessibilityLabel(
-            isSelected
-                ? "\(choice.title), selected"
-                : "Choose \(choice.title)"
+        .shadow(
+            color: isEmphasized ? accentColor.opacity(0.28) : .clear,
+            radius: 14
+        )
+    }
+}
+
+// MARK: - Duel card
+
+private struct RPSDuelChoiceCard: View {
+    let title: String
+    let choice: RPSChoice
+    let accentColor: Color
+    let isWinner: Bool
+    let isDimmed: Bool
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack {
+                Text(title.uppercased())
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.42))
+
+                Spacer()
+
+                if isWinner {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.yellow)
+                }
+            }
+
+            ZStack {
+                Circle()
+                    .fill(accentColor.opacity(0.12))
+                    .frame(width: 86, height: 86)
+
+                Circle()
+                    .stroke(accentColor.opacity(0.72), lineWidth: 1.5)
+                    .frame(width: 86, height: 86)
+                    .shadow(color: accentColor.opacity(0.36), radius: 12)
+
+                Text(choice.emoji)
+                    .font(.system(size: 50))
+            }
+
+            VStack(spacing: 4) {
+                Text(choice.title)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text(isWinner ? "Winner" : "Revealed")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isWinner ? accentColor : Color.white.opacity(0.40))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 214)
+        .background {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            accentColor.opacity(isWinner ? 0.12 : 0.06),
+                            Color.white.opacity(0.016)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(
+                    isWinner
+                        ? accentColor.opacity(0.84)
+                        : Color.white.opacity(0.10),
+                    lineWidth: isWinner ? 1.5 : 1
+                )
+        }
+        .opacity(isDimmed ? 0.72 : 1)
+        .shadow(
+            color: isWinner ? accentColor.opacity(0.24) : .clear,
+            radius: 14
         )
     }
 }
@@ -1420,8 +1402,6 @@ private enum RPSTheme {
 }
 
 #Preview {
-    Text(
-        "RPSView requires an active NearbyService session."
-    )
-    .preferredColorScheme(.dark)
+    Text("RPSView requires an active NearbyService session.")
+        .preferredColorScheme(.dark)
 }
