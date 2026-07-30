@@ -28,6 +28,10 @@ struct TicTacToeView: View {
     @State private var showQuitConfirmation = false
     @State private var isQuitting = false
 
+    // Rezultatul este stabilit imediat, astfel tabla se blochează
+    // și linia câștigătoare poate rămâne vizibilă înaintea dialogului.
+    @State private var showResultOverlay = false
+
     init(
         game: Game,
         nearbyService: NearbyService,
@@ -106,7 +110,7 @@ struct TicTacToeView: View {
                 .scrollIndicators(.hidden)
             }
 
-            if isGameOver {
+            if isGameOver && showResultOverlay {
                 GameResultOverlay(
                     result: localRoundResult,
                     title: resultTitle,
@@ -123,6 +127,11 @@ struct TicTacToeView: View {
                     }
                 )
                 .zIndex(10)
+                .transition(
+                    .opacity.combined(
+                        with: .scale(scale: 0.96)
+                    )
+                )
             }
 
             if isQuitting {
@@ -133,6 +142,34 @@ struct TicTacToeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .preferredColorScheme(.dark)
+        .task(id: isGameOver) {
+            // Orice rundă nouă ascunde imediat dialogul.
+            showResultOverlay = false
+
+            guard isGameOver else {
+                return
+            }
+
+            // Tabla este deja blocată prin isBoardInteractive,
+            // iar linia câștigătoare rămâne vizibilă o secundă.
+            try? await Task.sleep(
+                nanoseconds: 1_000_000_000
+            )
+
+            guard !Task.isCancelled,
+                  isGameOver else {
+                return
+            }
+
+            withAnimation(
+                .spring(
+                    response: 0.42,
+                    dampingFraction: 0.86
+                )
+            ) {
+                showResultOverlay = true
+            }
+        }
         .alert(
             "Quit game?",
             isPresented: $showQuitConfirmation
