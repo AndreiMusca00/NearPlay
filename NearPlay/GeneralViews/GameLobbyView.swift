@@ -45,6 +45,9 @@ struct GameLobbyView: View {
     // Number Rush
     @State private var numberRushStartPayload: NumberRushStartPayload?
 
+    // Battleship
+    @State private var battleshipStartPayload: BattleshipStartPayload?
+
     // MARK: - Computed properties
 
     private var safePlayerName: String {
@@ -58,7 +61,8 @@ struct GameLobbyView: View {
     private var isSupportedGame: Bool {
         game.id == Game.ticTacToe.id ||
         game.id == Game.rockPaperScissors.id ||
-        game.id == Game.numberRush.id
+        game.id == Game.numberRush.id ||
+        game.id == Game.battleship.id
     }
 
     private var hasConnectedOpponent: Bool {
@@ -908,6 +912,9 @@ struct GameLobbyView: View {
         case Game.numberRush.id:
             startNumberRush()
 
+        case Game.battleship.id:
+            startBattleship()
+
         default:
             isStartingGame = false
         }
@@ -1033,6 +1040,50 @@ struct GameLobbyView: View {
         }
     }
 
+
+    private func startBattleship() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+
+        let payload = BattleshipStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialStartingPlayerID:
+                nearbyService.localPlayerID
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+
+            nearbyService.send(
+                NearbyMessage(
+                    gameID: game.id,
+                    senderName: safePlayerName,
+                    type: .gameStart,
+                    payload: data
+                )
+            )
+
+            battleshipStartPayload = payload
+            shouldStartGame = true
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage =
+                "Failed to start Battleship."
+
+            print(
+                "Failed to encode BattleshipStartPayload: \(error)"
+            )
+        }
+    }
+
     // MARK: - Received messages
 
     private func handleReceivedMessage(
@@ -1070,6 +1121,9 @@ struct GameLobbyView: View {
 
             case Game.numberRush.id:
                 handleNumberRushStart(data)
+
+            case Game.battleship.id:
+                handleBattleshipStart(data)
 
             default:
                 break
@@ -1148,6 +1202,29 @@ struct GameLobbyView: View {
         }
     }
 
+
+    private func handleBattleshipStart(
+        _ data: Data
+    ) {
+        do {
+            let payload = try JSONDecoder().decode(
+                BattleshipStartPayload.self,
+                from: data
+            )
+
+            battleshipStartPayload = payload
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage =
+                "Failed to start Battleship."
+
+            print(
+                "Failed to decode BattleshipStartPayload: \(error)"
+            )
+        }
+    }
+
     // MARK: - Game destination
 
     @ViewBuilder
@@ -1221,6 +1298,40 @@ struct GameLobbyView: View {
                         startingPlayerID:
                             nearbyService.localPlayerID,
                         turnDuration: 5
+                    ),
+                onExitToHome: exitToHome
+            )
+
+
+        case Game.battleship.id:
+            BattleshipView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload:
+                    battleshipStartPayload ??
+                    BattleshipStartPayload(
+                        sessionID:
+                            nearbyService
+                            .lobbySession?
+                            .sessionID ??
+                            UUID().uuidString,
+                        playerOneID:
+                            nearbyService.localPlayerID,
+                        playerOneName:
+                            safePlayerName,
+                        playerTwoID:
+                            nearbyService
+                            .connectedPeers
+                            .first?
+                            .id ?? "peer",
+                        playerTwoName:
+                            nearbyService
+                            .connectedPeers
+                            .first?
+                            .displayName ?? "Peer",
+                        initialStartingPlayerID:
+                            nearbyService.localPlayerID
                     ),
                 onExitToHome: exitToHome
             )

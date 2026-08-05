@@ -72,9 +72,22 @@ extension Game {
         accentHex: "#19B9FF"
     )
 
+
+    static let battleship = Game(
+        id: "battleship",
+        title: "Battleship",
+        shortDescription: "Deploy your fleet and sink your opponent's ships.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_battleship",
+        fallbackSystemImage: "ferry.fill",
+        accentHex: "#11C7FF"
+    )
+
     static let all: [Game] = [
         ticTacToe,
         rockPaperScissors,
-        numberRush
+        numberRush,
+        battleship
     ]
 }
