@@ -84,10 +84,24 @@ extension Game {
         accentHex: "#11C7FF"
     )
 
+
+
+    static let connectFour = Game(
+        id: "connect_four",
+        title: "Connect Four",
+        shortDescription: "Drop discs and connect four before your opponent.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_connect_four",
+        fallbackSystemImage: "circle.grid.3x3.fill",
+        accentHex: "#754DFF"
+    )
+
     static let all: [Game] = [
         ticTacToe,
         rockPaperScissors,
         numberRush,
-        battleship
+        battleship,
+        connectFour
     ]
 }

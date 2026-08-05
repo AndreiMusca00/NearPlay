@@ -48,6 +48,9 @@ struct GameLobbyView: View {
     // Battleship
     @State private var battleshipStartPayload: BattleshipStartPayload?
 
+    // Connect Four
+    @State private var connectFourStartPayload: ConnectFourStartPayload?
+
     // MARK: - Computed properties
 
     private var safePlayerName: String {
@@ -62,7 +65,8 @@ struct GameLobbyView: View {
         game.id == Game.ticTacToe.id ||
         game.id == Game.rockPaperScissors.id ||
         game.id == Game.numberRush.id ||
-        game.id == Game.battleship.id
+        game.id == Game.battleship.id ||
+        game.id == Game.connectFour.id
     }
 
     private var hasConnectedOpponent: Bool {
@@ -915,6 +919,9 @@ struct GameLobbyView: View {
         case Game.battleship.id:
             startBattleship()
 
+        case Game.connectFour.id:
+            startConnectFour()
+
         default:
             isStartingGame = false
         }
@@ -1084,6 +1091,53 @@ struct GameLobbyView: View {
         }
     }
 
+
+    private func startConnectFour() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+
+        let payload = ConnectFourStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState:
+                ConnectFourGame.makeInitialState(
+                    startingPlayerID:
+                        nearbyService.localPlayerID
+                )
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+
+            nearbyService.send(
+                NearbyMessage(
+                    gameID: game.id,
+                    senderName: safePlayerName,
+                    type: .gameStart,
+                    payload: data
+                )
+            )
+
+            connectFourStartPayload = payload
+            shouldStartGame = true
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage =
+                "Failed to start Connect Four."
+
+            print(
+                "Failed to encode ConnectFourStartPayload: \(error)"
+            )
+        }
+    }
+
     // MARK: - Received messages
 
     private func handleReceivedMessage(
@@ -1124,6 +1178,9 @@ struct GameLobbyView: View {
 
             case Game.battleship.id:
                 handleBattleshipStart(data)
+
+            case Game.connectFour.id:
+                handleConnectFourStart(data)
 
             default:
                 break
@@ -1221,6 +1278,29 @@ struct GameLobbyView: View {
 
             print(
                 "Failed to decode BattleshipStartPayload: \(error)"
+            )
+        }
+    }
+
+
+    private func handleConnectFourStart(
+        _ data: Data
+    ) {
+        do {
+            let payload = try JSONDecoder().decode(
+                ConnectFourStartPayload.self,
+                from: data
+            )
+
+            connectFourStartPayload = payload
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage =
+                "Failed to start Connect Four."
+
+            print(
+                "Failed to decode ConnectFourStartPayload: \(error)"
             )
         }
     }
@@ -1332,6 +1412,43 @@ struct GameLobbyView: View {
                             .displayName ?? "Peer",
                         initialStartingPlayerID:
                             nearbyService.localPlayerID
+                    ),
+                onExitToHome: exitToHome
+            )
+
+
+        case Game.connectFour.id:
+            ConnectFourView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload:
+                    connectFourStartPayload ??
+                    ConnectFourStartPayload(
+                        sessionID:
+                            nearbyService
+                            .lobbySession?
+                            .sessionID ??
+                            UUID().uuidString,
+                        playerOneID:
+                            nearbyService.localPlayerID,
+                        playerOneName:
+                            safePlayerName,
+                        playerTwoID:
+                            nearbyService
+                            .connectedPeers
+                            .first?
+                            .id ?? "peer",
+                        playerTwoName:
+                            nearbyService
+                            .connectedPeers
+                            .first?
+                            .displayName ?? "Peer",
+                        initialState:
+                            ConnectFourGame.makeInitialState(
+                                startingPlayerID:
+                                    nearbyService.localPlayerID
+                            )
                     ),
                 onExitToHome: exitToHome
             )
