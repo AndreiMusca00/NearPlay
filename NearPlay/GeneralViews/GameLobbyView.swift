@@ -8,6 +8,7 @@ import UIKit
 
 struct GameLobbyView: View {
     let game: Game
+    let onExitToHome: (() -> Void)?
 
     @StateObject private var nearbyService = NearbyService()
 
@@ -29,15 +30,6 @@ struct GameLobbyView: View {
     @State private var countdownTimer: Timer?
     @State private var hasStartedCountdown = false
 
-    @State private var showComputerModeInfo = false
-
-    // Connect Four play-mode routing
-    @State private var hasChosenConnectFourMode = false
-    @State private var showConnectFourLocal = false
-    @State private var showConnectFourComputer = false
-    @State private var selectedConnectFourDifficulty:
-        ConnectFourDifficulty = .medium
-
     // Keeps the lobby visually frozen behind the dialog while invitation
     // state, connection state and countdown state are changing.
     @State private var frozenDiscoveredPeers: [NearbyPeer]?
@@ -57,6 +49,14 @@ struct GameLobbyView: View {
 
     // Connect Four
     @State private var connectFourStartPayload: ConnectFourStartPayload?
+
+    init(
+        game: Game,
+        onExitToHome: (() -> Void)? = nil
+    ) {
+        self.game = game
+        self.onExitToHome = onExitToHome
+    }
 
     // MARK: - Computed properties
 
@@ -232,29 +232,6 @@ struct GameLobbyView: View {
                     )
                 )
             }
-
-            if game.id == Game.connectFour.id,
-               !hasChosenConnectFourMode {
-                ConnectFourModeSelectionView(
-                    gameTitle: game.title,
-                    onBack: {
-                        nearbyService.stop()
-                        dismiss()
-                    },
-                    onNearby: {
-                        hasChosenConnectFourMode = true
-                    },
-                    onLocal: {
-                        showConnectFourLocal = true
-                    },
-                    onComputer: { difficulty in
-                        selectedConnectFourDifficulty =
-                            difficulty
-                        showConnectFourComputer = true
-                    }
-                )
-                .zIndex(50)
-            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .preferredColorScheme(.dark)
@@ -265,16 +242,6 @@ struct GameLobbyView: View {
             if !isStartingGame {
                 nearbyService.stop()
             }
-        }
-        .alert(
-            "Play vs OP",
-            isPresented: $showComputerModeInfo
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(
-                "The computer opponent will be implemented separately for this game."
-            )
         }
         .onReceive(
             nearbyService.$lastReceivedMessage
@@ -335,23 +302,6 @@ struct GameLobbyView: View {
         ) {
             gameDestination
         }
-        .navigationDestination(
-            isPresented: $showConnectFourLocal
-        ) {
-            ConnectFourLocalView(
-                game: game
-            )
-        }
-        .navigationDestination(
-            isPresented:
-                $showConnectFourComputer
-        ) {
-            ConnectFourComputerView(
-                game: game,
-                difficulty:
-                    selectedConnectFourDifficulty
-            )
-        }
     }
 
     // MARK: - Lobby dialog
@@ -374,13 +324,6 @@ struct GameLobbyView: View {
                     ? "Searching for nearby players"
                     : "Start searching for nearby players"
             )
-
-            // Connect Four already has a dedicated mode-selection screen.
-            // Once Nearby Player was chosen, there is no reason to offer
-            // "Change Play Mode" again inside the lobby.
-            if game.id != Game.connectFour.id {
-                playVersusOpponentButton
-            }
 
             nearbyPlayersSection
                 .frame(
@@ -500,88 +443,6 @@ struct GameLobbyView: View {
                     : "Add to liked games"
             )
         }
-    }
-
-    // MARK: - Play versus opponent
-
-    private var playVersusOpponentButton: some View {
-        Button {
-            showComputerModeInfo = true
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "cpu")
-                    .font(
-                        .system(
-                            size: 23,
-                            weight: .semibold
-                        )
-                    )
-                    .foregroundStyle(
-                        LobbyTheme.primaryGradient
-                    )
-                    .frame(width: 42, height: 42)
-                    .background {
-                        Circle()
-                            .fill(
-                                LobbyTheme
-                                    .brightPurple
-                                    .opacity(0.12)
-                            )
-                    }
-
-                Text("Play vs OP")
-                    .font(
-                        .system(
-                            size: 19,
-                            weight: .semibold
-                        )
-                    )
-                    .foregroundStyle(.white)
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(
-                        .system(
-                            size: 15,
-                            weight: .bold
-                        )
-                    )
-                    .foregroundStyle(
-                        Color.white.opacity(0.65)
-                    )
-            }
-            .padding(.horizontal, 20)
-            .frame(height: 76)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: 27,
-                    style: .continuous
-                )
-                .fill(Color.white.opacity(0.028))
-            }
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: 27,
-                    style: .continuous
-                )
-                .stroke(
-                    LobbyTheme.primaryGradient,
-                    lineWidth: 1.3
-                )
-            }
-            .shadow(
-                color: LobbyTheme.brightBlue.opacity(0.18),
-                radius: 12,
-                x: -3
-            )
-            .shadow(
-                color: LobbyTheme.brightPurple.opacity(0.18),
-                radius: 12,
-                x: 3
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Nearby players
@@ -716,11 +577,7 @@ struct GameLobbyView: View {
                 Text(
                     isSearching
                         ? "Nearby players will appear here automatically."
-                        : (
-                            game.id == Game.connectFour.id
-                            ? "Hold the button above to discover nearby players."
-                            : "Hold the button above or play versus OP."
-                        )
+                        : "Hold the button above to discover nearby players."
                 )
                 .font(.system(size: 14))
                 .foregroundStyle(
@@ -1604,7 +1461,12 @@ struct GameLobbyView: View {
         nearbyService.stop()
         isStartingGame = false
         shouldStartGame = false
-        dismiss()
+
+        if let onExitToHome {
+            onExitToHome()
+        } else {
+            dismiss()
+        }
     }
 
     // MARK: - Error

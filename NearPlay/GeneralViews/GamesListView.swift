@@ -1,10 +1,4 @@
-//
-//  GamesListView.swift
-//  NearPlay
-//
-
 import SwiftUI
-import UIKit
 
 struct GamesListView: View {
     @Environment(\._playerNameBinding)
@@ -15,9 +9,10 @@ struct GamesListView: View {
 
     @State private var isEditingName = false
     @State private var selectedFilter: GamesFilter = .all
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 appBackground
 
@@ -49,7 +44,12 @@ struct GamesListView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Game.self) { game in
-                GameLobbyView(game: game)
+                GameEntryView(
+                    game: game,
+                    onExitToHome: {
+                        navigationPath = NavigationPath()
+                    }
+                )
             }
             .sheet(isPresented: $isEditingName) {
                 EditNameSheet(name: playerName)
@@ -201,7 +201,9 @@ struct GamesListView: View {
         let isSelected = selectedFilter == filter
 
         return Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(
+                .easeInOut(duration: 0.2)
+            ) {
                 selectedFilter = filter
             }
         } label: {
@@ -290,7 +292,7 @@ struct GamesListView: View {
         HStack(spacing: 12) {
             NavigationLink(value: game) {
                 HStack(spacing: 14) {
-                    GameArtworkView(game: game)
+                    gameIcon(for: game)
 
                     VStack(
                         alignment: .leading,
@@ -306,7 +308,7 @@ struct GamesListView: View {
                             .foregroundStyle(.white)
                             .lineLimit(1)
 
-                        Text(game.playerCountText)
+                        Text(playerText(for: game))
                             .font(.system(size: 15))
                             .foregroundStyle(
                                 Color.white.opacity(0.5)
@@ -368,6 +370,115 @@ struct GamesListView: View {
         .padding(.vertical, 12)
     }
 
+    // MARK: - Game icon
+
+    private func gameIcon(
+        for game: Game
+    ) -> some View {
+        let color = iconColor(for: game.title)
+
+        return Image(
+            systemName: icon(for: game.title)
+        )
+        .font(
+            .system(
+                size: 25,
+                weight: .semibold
+            )
+        )
+        .foregroundStyle(color)
+        .frame(width: 64, height: 64)
+        .background {
+            RoundedRectangle(
+                cornerRadius: 17,
+                style: .continuous
+            )
+            .fill(color.opacity(0.09))
+        }
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 17,
+                style: .continuous
+            )
+            .stroke(
+                color.opacity(0.25),
+                lineWidth: 1
+            )
+        }
+    }
+
+    private func icon(
+        for title: String
+    ) -> String {
+        switch title {
+        case "Tic-Tac-Toe":
+            return "grid"
+
+        case "Connect Four":
+            return "circle.grid.3x3.fill"
+
+        case "Rock Paper Scissors":
+            return "hand.raised.fill"
+
+        case "Backgammon":
+            return "die.face.5.fill"
+
+        case "Minesweeper":
+            return "flag.fill"
+
+        case "Snake":
+            return "point.topleft.down.curvedto.point.bottomright.up"
+
+        default:
+            return "gamecontroller.fill"
+        }
+    }
+
+    private func iconColor(
+        for title: String
+    ) -> Color {
+        switch title {
+        case "Tic-Tac-Toe":
+            return .cyan
+
+        case "Connect Four":
+            return .yellow
+
+        case "Rock Paper Scissors":
+            return .purple
+
+        case "Backgammon":
+            return .red
+
+        case "Minesweeper":
+            return .green
+
+        case "Snake":
+            return Color(
+                red: 0.25,
+                green: 0.95,
+                blue: 0.25
+            )
+
+        default:
+            return .blue
+        }
+    }
+
+    private func playerText(
+        for game: Game
+    ) -> String {
+        if game.minPlayers == game.maxPlayers {
+            if game.minPlayers == 1 {
+                return "1 player"
+            }
+
+            return "\(game.minPlayers) players"
+        }
+
+        return "\(game.minPlayers)–\(game.maxPlayers) players"
+    }
+
     // MARK: - Favorites
 
     private var filteredGames: [Game] {
@@ -382,22 +493,37 @@ struct GamesListView: View {
         }
     }
 
-    private func isFavorite(_ game: Game) -> Bool {
-        favoriteGameIDs.wrappedValue.contains(game.id)
+    private func isFavorite(
+        _ game: Game
+    ) -> Bool {
+        favoriteGameIDs.wrappedValue.contains(
+            gameKey(for: game)
+        )
     }
 
-    private func toggleFavorite(_ game: Game) {
+    private func toggleFavorite(
+        _ game: Game
+    ) {
         var updatedIDs = favoriteGameIDs.wrappedValue
+        let key = gameKey(for: game)
 
-        withAnimation(.easeInOut(duration: 0.18)) {
-            if updatedIDs.contains(game.id) {
-                updatedIDs.remove(game.id)
+        withAnimation(
+            .easeInOut(duration: 0.18)
+        ) {
+            if updatedIDs.contains(key) {
+                updatedIDs.remove(key)
             } else {
-                updatedIDs.insert(game.id)
+                updatedIDs.insert(key)
             }
 
             favoriteGameIDs.wrappedValue = updatedIDs
         }
+    }
+
+    private func gameKey(
+        for game: Game
+    ) -> String {
+        String(describing: game.id)
     }
 
     // MARK: - Empty favorites
@@ -441,7 +567,9 @@ struct GamesListView: View {
             .multilineTextAlignment(.center)
 
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(
+                    .easeInOut(duration: 0.2)
+                ) {
                     selectedFilter = .all
                 }
             } label: {
@@ -489,133 +617,9 @@ struct GamesListView: View {
     }
 }
 
-// MARK: - Game artwork
-
-private struct GameArtworkView: View {
-    let game: Game
-
-    private var accentColor: Color {
-        Color(hex: game.accentHex)
-    }
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-            .fill(
-                LinearGradient(
-                    colors: [
-                        accentColor.opacity(0.18),
-                        accentColor.opacity(0.05)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-
-            if let uiImage = UIImage(named: game.imageName) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: game.fallbackSystemImage)
-                    .font(
-                        .system(
-                            size: 27,
-                            weight: .semibold
-                        )
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                accentColor,
-                                accentColor.opacity(0.65)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .padding(14)
-            }
-        }
-        .frame(width: 64, height: 64)
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-        )
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-            .stroke(
-                accentColor.opacity(0.28),
-                lineWidth: 1
-            )
-        }
-    }
-}
-
-// MARK: - Filters
-
 private enum GamesFilter {
     case all
     case liked
-}
-
-// MARK: - Hex colors
-
-private extension Color {
-    init(hex: String) {
-        let cleanedHex = hex.trimmingCharacters(
-            in: CharacterSet.alphanumerics.inverted
-        )
-
-        var hexValue: UInt64 = 0
-        Scanner(string: cleanedHex).scanHexInt64(&hexValue)
-
-        let red: Double
-        let green: Double
-        let blue: Double
-        let alpha: Double
-
-        switch cleanedHex.count {
-        case 3:
-            red = Double((hexValue >> 8) * 17) / 255
-            green = Double((hexValue >> 4 & 0xF) * 17) / 255
-            blue = Double((hexValue & 0xF) * 17) / 255
-            alpha = 1
-
-        case 6:
-            red = Double(hexValue >> 16) / 255
-            green = Double(hexValue >> 8 & 0xFF) / 255
-            blue = Double(hexValue & 0xFF) / 255
-            alpha = 1
-
-        case 8:
-            red = Double(hexValue >> 24) / 255
-            green = Double(hexValue >> 16 & 0xFF) / 255
-            blue = Double(hexValue >> 8 & 0xFF) / 255
-            alpha = Double(hexValue & 0xFF) / 255
-
-        default:
-            red = 0
-            green = 0
-            blue = 0
-            alpha = 1
-        }
-
-        self.init(
-            red: red,
-            green: green,
-            blue: blue,
-            opacity: alpha
-        )
-    }
 }
 
 #Preview {
