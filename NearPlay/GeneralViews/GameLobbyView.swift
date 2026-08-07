@@ -31,6 +31,13 @@ struct GameLobbyView: View {
 
     @State private var showComputerModeInfo = false
 
+    // Connect Four play-mode routing
+    @State private var hasChosenConnectFourMode = false
+    @State private var showConnectFourLocal = false
+    @State private var showConnectFourComputer = false
+    @State private var selectedConnectFourDifficulty:
+        ConnectFourDifficulty = .medium
+
     // Keeps the lobby visually frozen behind the dialog while invitation
     // state, connection state and countdown state are changing.
     @State private var frozenDiscoveredPeers: [NearbyPeer]?
@@ -170,22 +177,33 @@ struct GameLobbyView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 14)
 
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // The lobby remains visually unchanged behind the dialog.
-                        // Only the content inside the same dialog card changes.
-                        searchingContent
+                VStack(spacing: 14) {
+                    // The lobby itself is static.
+                    // Only the discovered-player list can scroll.
+                    searchingContent
+                        .frame(
+                            maxWidth: .infinity,
+                            maxHeight: .infinity,
+                            alignment: .top
+                        )
 
-                        if let error = nearbyService.errorMessage,
-                           !error.isEmpty {
-                            errorView(error)
-                        }
+                    if let error = nearbyService.errorMessage,
+                       !error.isEmpty {
+                        errorView(error)
+                            .fixedSize(
+                                horizontal: false,
+                                vertical: true
+                            )
                     }
-                    .padding(.top, 22)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 35)
                 }
-                .scrollIndicators(.hidden)
+                .padding(.top, 12)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 18)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .top
+                )
                 .allowsHitTesting(lobbyDialogState == nil)
             }
 
@@ -213,6 +231,29 @@ struct GameLobbyView: View {
                         with: .scale(scale: 0.96)
                     )
                 )
+            }
+
+            if game.id == Game.connectFour.id,
+               !hasChosenConnectFourMode {
+                ConnectFourModeSelectionView(
+                    gameTitle: game.title,
+                    onBack: {
+                        nearbyService.stop()
+                        dismiss()
+                    },
+                    onNearby: {
+                        hasChosenConnectFourMode = true
+                    },
+                    onLocal: {
+                        showConnectFourLocal = true
+                    },
+                    onComputer: { difficulty in
+                        selectedConnectFourDifficulty =
+                            difficulty
+                        showConnectFourComputer = true
+                    }
+                )
+                .zIndex(50)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -294,6 +335,23 @@ struct GameLobbyView: View {
         ) {
             gameDestination
         }
+        .navigationDestination(
+            isPresented: $showConnectFourLocal
+        ) {
+            ConnectFourLocalView(
+                game: game
+            )
+        }
+        .navigationDestination(
+            isPresented:
+                $showConnectFourComputer
+        ) {
+            ConnectFourComputerView(
+                game: game,
+                difficulty:
+                    selectedConnectFourDifficulty
+            )
+        }
     }
 
     // MARK: - Lobby dialog
@@ -304,7 +362,7 @@ struct GameLobbyView: View {
     // MARK: - Searching content
 
     private var searchingContent: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             HoldToSearchButton(
                 progress: $progress,
                 isSearching: isSearching
@@ -317,10 +375,25 @@ struct GameLobbyView: View {
                     : "Start searching for nearby players"
             )
 
-            playVersusOpponentButton
+            // Connect Four already has a dedicated mode-selection screen.
+            // Once Nearby Player was chosen, there is no reason to offer
+            // "Change Play Mode" again inside the lobby.
+            if game.id != Game.connectFour.id {
+                playVersusOpponentButton
+            }
 
             nearbyPlayersSection
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .top
+                )
         }
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: .top
+        )
     }
 
     // MARK: - Header
@@ -555,26 +628,40 @@ struct GameLobbyView: View {
             if visibleDiscoveredPeers.isEmpty {
                 emptyPlayersView
             } else {
-                VStack(spacing: 12) {
-                    ForEach(
-                        visibleDiscoveredPeers,
-                        id: \.id
-                    ) { peer in
-                        NearbyPlayerRow(
-                            peerName: peer.displayName,
-                            state: .available,
-                            accentColor: accentColor(
-                                for: peer.displayName
-                            )
-                        ) {
-                            frozenDiscoveredPeers =
-                                nearbyService.discoveredPeers
-                            nearbyService.invite(peer)
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(
+                            visibleDiscoveredPeers,
+                            id: \.id
+                        ) { peer in
+                            NearbyPlayerRow(
+                                peerName: peer.displayName,
+                                state: .available,
+                                accentColor: accentColor(
+                                    for: peer.displayName
+                                )
+                            ) {
+                                frozenDiscoveredPeers =
+                                    nearbyService.discoveredPeers
+                                nearbyService.invite(peer)
+                            }
                         }
                     }
+                    .padding(.bottom, 4)
                 }
+                .scrollIndicators(.visible)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .top
+                )
             }
         }
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: .top
+        )
     }
 
     private var emptyPlayersView: some View {
@@ -586,14 +673,14 @@ struct GameLobbyView: View {
                             .brightPurple
                             .opacity(0.07)
                     )
-                    .frame(width: 108, height: 108)
+                    .frame(width: 92, height: 92)
 
                 Circle()
                     .stroke(
                         LobbyTheme.primaryGradient,
                         lineWidth: 1.4
                     )
-                    .frame(width: 88, height: 88)
+                    .frame(width: 74, height: 74)
 
                 Image(
                     systemName:
@@ -629,7 +716,11 @@ struct GameLobbyView: View {
                 Text(
                     isSearching
                         ? "Nearby players will appear here automatically."
-                        : "Hold the button above or play versus OP."
+                        : (
+                            game.id == Game.connectFour.id
+                            ? "Hold the button above to discover nearby players."
+                            : "Hold the button above or play versus OP."
+                        )
                 )
                 .font(.system(size: 14))
                 .foregroundStyle(
@@ -639,7 +730,7 @@ struct GameLobbyView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 34)
+        .padding(.vertical, 23)
         .padding(.horizontal, 20)
         .background {
             RoundedRectangle(

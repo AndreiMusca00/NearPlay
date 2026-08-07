@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct ConnectFourGame {
+struct ConnectFourGame: Sendable {
     static let rows = 6
     static let columns = 7
 
@@ -55,6 +55,7 @@ struct ConnectFourGame {
         )
     }
 
+    @discardableResult
     mutating func play(
         column: Int,
         by playerID: String,

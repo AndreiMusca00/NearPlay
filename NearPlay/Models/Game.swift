@@ -24,6 +24,31 @@ struct Game: Identifiable, Hashable {
     // Culoarea specifică jocului
     let accentHex: String
 
+    // Modurile disponibile. Jocurile vechi rămân Nearby implicit.
+    let supportedModes: Set<GamePlayMode>
+
+    init(
+        id: String,
+        title: String,
+        shortDescription: String,
+        minPlayers: Int,
+        maxPlayers: Int,
+        imageName: String,
+        fallbackSystemImage: String,
+        accentHex: String,
+        supportedModes: Set<GamePlayMode> = [.nearby]
+    ) {
+        self.id = id
+        self.title = title
+        self.shortDescription = shortDescription
+        self.minPlayers = minPlayers
+        self.maxPlayers = maxPlayers
+        self.imageName = imageName
+        self.fallbackSystemImage = fallbackSystemImage
+        self.accentHex = accentHex
+        self.supportedModes = supportedModes
+    }
+
     var playerCountText: String {
         if minPlayers == maxPlayers {
             return minPlayers == 1
@@ -94,7 +119,12 @@ extension Game {
         maxPlayers: 2,
         imageName: "game_connect_four",
         fallbackSystemImage: "circle.grid.3x3.fill",
-        accentHex: "#754DFF"
+        accentHex: "#754DFF",
+        supportedModes: [
+            .nearby,
+            .local,
+            .computer
+        ]
     )
 
     static let all: [Game] = [
