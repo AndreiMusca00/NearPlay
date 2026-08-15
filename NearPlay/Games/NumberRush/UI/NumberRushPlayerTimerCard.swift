@@ -1,8 +1,3 @@
-//
-//  NumberRushPlayerTimerCard.swift
-//  NearPlay
-//
-
 import SwiftUI
 
 struct NumberRushPlayerTimerCard: View {

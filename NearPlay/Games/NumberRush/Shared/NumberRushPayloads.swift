@@ -1,8 +1,3 @@
-//
-//  NumberRushPayloads.swift
-//  NearPlay
-//
-
 import Foundation
 
 struct NumberRushStartPayload: Codable, Equatable {
@@ -28,5 +23,6 @@ struct NumberRushSelectionPayload: Codable, Equatable {
 
 struct NumberRushStatePayload: Codable, Equatable {
     let sessionID: String
+    let roundNumber: Int
     let state: NumberRushGameState
 }

@@ -104,7 +104,12 @@ extension Game {
         maxPlayers: 2,
         imageName: "game_number_rush",
         fallbackSystemImage: "number.square.fill",
-        accentHex: "#19B9FF"
+        accentHex: "#19B9FF",
+        supportedModes: [
+            .nearby,
+            .local,
+            .computer
+        ]
     )
 
 

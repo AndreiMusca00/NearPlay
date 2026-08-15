@@ -1,43 +1,9 @@
-//
-//  NumberRushGame.swift
-//  NearPlay
-//
-
 import Foundation
 
-struct NumberRushGameState: Codable, Equatable {
-    var shuffledNumbers: [Int]
-    var targetNumber: Int
-    var scores: [String: Int]
+struct NumberRushGame: Sendable {
+    static let firstTargetNumber = 1
+    static let finalTargetNumber = 100
 
-    var activePlayerID: String
-    var turnID: UUID
-    var turnStartedAt: Date
-    var turnDuration: TimeInterval
-
-    var isFinished: Bool
-
-    var deadline: Date {
-        turnStartedAt.addingTimeInterval(turnDuration)
-    }
-
-    var completedNumbers: Set<Int> {
-        guard targetNumber > 1 else {
-            return []
-        }
-
-        return Set(1..<targetNumber)
-    }
-}
-
-enum NumberRushSelectionOutcome: Equatable {
-    case ignored
-    case correct(number: Int)
-    case wrong(number: Int)
-    case finished(number: Int)
-}
-
-struct NumberRushGame {
     let playerOneID: String
     let playerTwoID: String
     let baseTurnDuration: TimeInterval
@@ -56,18 +22,13 @@ struct NumberRushGame {
         self.playerTwoID = playerTwoID
         self.baseTurnDuration = baseTurnDuration
 
-        self.state = NumberRushGameState(
+        self.state = Self.makeInitialState(
+            playerOneID: playerOneID,
+            playerTwoID: playerTwoID,
             shuffledNumbers: shuffledNumbers,
-            targetNumber: 1,
-            scores: [
-                playerOneID: 0,
-                playerTwoID: 0
-            ],
-            activePlayerID: startingPlayerID,
-            turnID: UUID(),
-            turnStartedAt: now,
+            startingPlayerID: startingPlayerID,
             turnDuration: baseTurnDuration,
-            isFinished: false
+            now: now
         )
     }
 
@@ -81,6 +42,29 @@ struct NumberRushGame {
         self.playerTwoID = playerTwoID
         self.baseTurnDuration = baseTurnDuration
         self.state = state
+    }
+
+    static func makeInitialState(
+        playerOneID: String,
+        playerTwoID: String,
+        shuffledNumbers: [Int],
+        startingPlayerID: String,
+        turnDuration: TimeInterval = 5,
+        now: Date = Date()
+    ) -> NumberRushGameState {
+        NumberRushGameState(
+            shuffledNumbers: shuffledNumbers,
+            targetNumber: firstTargetNumber,
+            scores: [
+                playerOneID: 0,
+                playerTwoID: 0
+            ],
+            activePlayerID: startingPlayerID,
+            turnID: UUID(),
+            turnStartedAt: now,
+            turnDuration: turnDuration,
+            isFinished: false
+        )
     }
 
     mutating func applyRemoteState(
@@ -112,13 +96,11 @@ struct NumberRushGame {
         let selectedTarget = state.targetNumber
         state.targetNumber += 1
 
-        if selectedTarget >= 100 {
+        if selectedTarget >= Self.finalTargetNumber {
             state.isFinished = true
             return .finished(number: selectedTarget)
         }
 
-        // Jucătorul păstrează tura și primește o secundă în plus
-        // peste timpul care îi mai rămânea în momentul alegerii.
         let remaining = max(
             state.deadline.timeIntervalSince(now),
             0
@@ -149,19 +131,22 @@ struct NumberRushGame {
         startingPlayerID: String,
         now: Date = Date()
     ) {
-        state = NumberRushGameState(
+        state = Self.makeInitialState(
+            playerOneID: playerOneID,
+            playerTwoID: playerTwoID,
             shuffledNumbers: shuffledNumbers,
-            targetNumber: 1,
-            scores: [
-                playerOneID: 0,
-                playerTwoID: 0
-            ],
-            activePlayerID: startingPlayerID,
-            turnID: UUID(),
-            turnStartedAt: now,
+            startingPlayerID: startingPlayerID,
             turnDuration: baseTurnDuration,
-            isFinished: false
+            now: now
         )
+    }
+
+    func opponentID(
+        for playerID: String
+    ) -> String {
+        playerID == playerOneID
+            ? playerTwoID
+            : playerOneID
     }
 
     private mutating func switchTurn(

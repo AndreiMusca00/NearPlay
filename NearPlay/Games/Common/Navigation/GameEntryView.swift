@@ -3,8 +3,6 @@ import SwiftUI
 struct GameEntryView: View {
     let game: Game
 
-    // Used by Nearby games that explicitly quit back to the
-    // main NearPlay games list.
     let onExitToHome: () -> Void
 
     @State
@@ -85,6 +83,11 @@ struct GameEntryView: View {
                 game: game
             )
 
+        case Game.numberRush.id:
+            NumberRushLocalView(
+                game: game
+            )
+
         case Game.connectFour.id:
             ConnectFourLocalView(
                 game: game
@@ -111,6 +114,13 @@ struct GameEntryView: View {
 
         case Game.rockPaperScissors.id:
             RPSComputerView(
+                game: game,
+                difficulty:
+                    selectedDifficulty
+            )
+
+        case Game.numberRush.id:
+            NumberRushComputerView(
                 game: game,
                 difficulty:
                     selectedDifficulty

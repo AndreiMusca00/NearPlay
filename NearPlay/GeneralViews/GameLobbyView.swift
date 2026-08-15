@@ -963,6 +963,7 @@ struct GameLobbyView: View {
             )
         }
     }
+    
     private func startNumberRush() {
         guard let firstPeer = connectedOpponent,
               let session = validLobbySession else {
@@ -1006,7 +1007,6 @@ struct GameLobbyView: View {
             )
         }
     }
-
 
     private func startBattleship() {
         guard let firstPeer = connectedOpponent,
@@ -1349,10 +1349,12 @@ struct GameLobbyView: View {
                         sessionID:
                             nearbyService
                             .lobbySession?
-                            .sessionID ?? UUID().uuidString,
+                            .sessionID ??
+                            UUID().uuidString,
                         playerOneID:
                             nearbyService.localPlayerID,
-                        playerOneName: safePlayerName,
+                        playerOneName:
+                            safePlayerName,
                         playerTwoID:
                             nearbyService
                             .connectedPeers
@@ -1367,9 +1369,11 @@ struct GameLobbyView: View {
                             Array(1...100).shuffled(),
                         startingPlayerID:
                             nearbyService.localPlayerID,
-                        turnDuration: 5
+                        turnDuration:
+                            5
                     ),
-                onExitToHome: exitToHome
+                onExitToHome:
+                    exitToHome
             )
 
 
