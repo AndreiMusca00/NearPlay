@@ -239,6 +239,72 @@ struct BattleshipGame {
         winnerPlayerID = nil
     }
 
+
+    mutating func clearFleet() {
+        guard phase == .placement,
+              !localReady else {
+            return
+        }
+
+        ownBoard = BattleshipLocalBoard()
+    }
+
+    @discardableResult
+    mutating func randomizeFleet(
+        maxAttempts: Int = 40
+    ) -> Bool {
+        guard phase == .placement,
+              !localReady else {
+            return false
+        }
+
+        var bestBoard = BattleshipLocalBoard()
+        var bestPlacedCount = 0
+
+        for _ in 0..<maxAttempts {
+            ownBoard = BattleshipLocalBoard()
+
+            for definition in BattleshipShipDefinition.standardFleet {
+                var didPlace = false
+
+                for _ in 0..<240 {
+                    let orientation: BattleshipOrientation =
+                        Bool.random() ? .horizontal : .vertical
+
+                    let coordinate = BattleshipCoordinate(
+                        row: Int.random(in: 0..<Self.boardSize),
+                        column: Int.random(in: 0..<Self.boardSize)
+                    )
+
+                    if placeOrMoveShip(
+                        definition: definition,
+                        preferredOrigin: coordinate,
+                        orientation: orientation
+                    ) {
+                        didPlace = true
+                        break
+                    }
+                }
+
+                if !didPlace {
+                    break
+                }
+            }
+
+            if ownBoard.ships.count > bestPlacedCount {
+                bestPlacedCount = ownBoard.ships.count
+                bestBoard = ownBoard
+            }
+
+            if ownBoard.allShipsPlaced {
+                return true
+            }
+        }
+
+        ownBoard = bestBoard
+        return ownBoard.allShipsPlaced
+    }
+
     static func isInsideBoard(_ coordinate: BattleshipCoordinate) -> Bool {
         coordinate.row >= 0 && coordinate.row < boardSize &&
         coordinate.column >= 0 && coordinate.column < boardSize

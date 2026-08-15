@@ -1407,7 +1407,8 @@ struct GameLobbyView: View {
                         initialStartingPlayerID:
                             nearbyService.localPlayerID
                     ),
-                onExitToHome: exitToHome
+                onExitToHome:
+                    exitToHome
             )
 
 

@@ -121,7 +121,12 @@ extension Game {
         maxPlayers: 2,
         imageName: "game_battleship",
         fallbackSystemImage: "ferry.fill",
-        accentHex: "#11C7FF"
+        accentHex: "#11C7FF",
+        supportedModes: [
+            .nearby,
+            .local,
+            .computer
+        ]
     )
 
 

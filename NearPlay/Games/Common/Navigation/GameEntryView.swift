@@ -93,6 +93,11 @@ struct GameEntryView: View {
                 game: game
             )
 
+        case Game.battleship.id:
+            BattleshipLocalView(
+                game: game
+            )
+            
         default:
             unavailableDestination(
                 title: "Two Players"
@@ -133,6 +138,13 @@ struct GameEntryView: View {
                     connectFourDifficulty
             )
 
+        case Game.battleship.id:
+            BattleshipComputerView(
+                game: game,
+                difficulty:
+                    selectedDifficulty
+            )
+            
         default:
             unavailableDestination(
                 title: "Play vs Computer"
