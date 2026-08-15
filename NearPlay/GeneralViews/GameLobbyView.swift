@@ -922,14 +922,20 @@ struct GameLobbyView: View {
     }
 
     private func startRockPaperScissors() {
-        guard let firstPeer = connectedOpponent else {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
             isStartingGame = false
             return
         }
 
         let payload = RPSStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
             playerOneName: safePlayerName,
-            playerTwoName: firstPeer.displayName
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState:
+                RPSGame.makeInitialState()
         )
 
         do {
@@ -957,8 +963,6 @@ struct GameLobbyView: View {
             )
         }
     }
-
-
     private func startNumberRush() {
         guard let firstPeer = connectedOpponent,
               let session = validLobbySession else {
@@ -1308,12 +1312,27 @@ struct GameLobbyView: View {
                 startPayload:
                     rpsStartPayload ??
                     RPSStartPayload(
-                        playerOneName: safePlayerName,
+                        sessionID:
+                            nearbyService
+                            .lobbySession?
+                            .sessionID ??
+                            UUID().uuidString,
+                        playerOneID:
+                            nearbyService.localPlayerID,
+                        playerOneName:
+                            safePlayerName,
+                        playerTwoID:
+                            nearbyService
+                            .connectedPeers
+                            .first?
+                            .id ?? "peer",
                         playerTwoName:
                             nearbyService
                             .connectedPeers
                             .first?
-                            .displayName ?? "Peer"
+                            .displayName ?? "Peer",
+                        initialState:
+                            RPSGame.makeInitialState()
                     ),
                 onExitToHome: exitToHome
             )
