@@ -254,7 +254,7 @@ struct GameLobbyView: View {
         }
         .onChange(
             of: nearbyService.connectedPeers.count
-        ) { connectedCount in
+        ) { _, connectedCount in
             if connectedCount == 0 {
                 resetAutomaticStartState()
                 return
@@ -277,12 +277,10 @@ struct GameLobbyView: View {
         }
         .onChange(
             of: nearbyService.lobbySession?.sessionID
-        ) { _ in
-            scheduleHostCountdownIfPossible()
-        }
+        ) { scheduleHostCountdownIfPossible() }
         .onChange(
             of: nearbyService.pendingInvitation?.id
-        ) { invitationID in
+        ) { _, invitationID in
             if invitationID != nil,
                frozenDiscoveredPeers == nil {
                 frozenDiscoveredPeers =
@@ -291,7 +289,7 @@ struct GameLobbyView: View {
         }
         .onChange(
             of: lobbyDialogState != nil
-        ) { isDialogPresented in
+        ) { _, isDialogPresented in
             if !isDialogPresented,
                !hasConnectedOpponent {
                 frozenDiscoveredPeers = nil

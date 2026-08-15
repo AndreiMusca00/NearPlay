@@ -222,7 +222,7 @@ enum BattleshipAI {
         return candidates.randomElement()
     }
 
-    private static func neighbors(
+    nonisolated private static func neighbors(
         of coordinate: BattleshipCoordinate
     ) -> [BattleshipCoordinate] {
         [
@@ -313,3 +313,4 @@ enum BattleshipAI {
         return board
     }
 }
+

@@ -6,8 +6,8 @@ final class BattleshipMatchController: ObservableObject {
     @Published
     private(set) var game: BattleshipGame
 
-    init(game: BattleshipGame = BattleshipGame()) {
-        self.game = game
+    init(game: BattleshipGame? = nil) {
+        self.game = game ?? BattleshipGame()
     }
 
     var ownBoard: BattleshipLocalBoard {
@@ -130,3 +130,4 @@ final class BattleshipMatchController: ObservableObject {
         game.resetForRematch()
     }
 }
+

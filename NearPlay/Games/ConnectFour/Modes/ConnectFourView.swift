@@ -171,7 +171,7 @@ struct ConnectFourView: View {
         }
         .onChange(
             of: rematchController.confirmedRoundNumber
-        ) { confirmedRound in
+        ) { _, confirmedRound in
             guard let confirmedRound else {
                 return
             }

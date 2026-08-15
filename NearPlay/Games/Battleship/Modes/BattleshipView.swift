@@ -199,7 +199,7 @@ struct BattleshipView: View {
         }
         .onChange(
             of: rematchController.confirmedRoundNumber
-        ) { confirmedRound in
+        ) { _, confirmedRound in
             guard let confirmedRound else {
                 return
             }
@@ -431,15 +431,13 @@ struct BattleshipView: View {
                                 )
                         )
 
-                    do {
+                    
                         placed = battleship.placeOrMoveShip(
                             definition: ship,
                             preferredOrigin: coordinate,
                             orientation: randomOrientation
                         )
-                    } catch {
-                        continue
-                    }
+                    
                 }
             }
         } while

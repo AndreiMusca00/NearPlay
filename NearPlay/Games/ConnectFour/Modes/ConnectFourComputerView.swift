@@ -212,7 +212,7 @@ struct ConnectFourComputerView: View {
             let column = await Task.detached(
                 priority: .userInitiated
             ) {
-                ConnectFourAI.chooseColumn(
+               await ConnectFourAI.chooseColumn(
                     state: stateSnapshot,
                     playerOneID: Self.humanID,
                     playerTwoID: Self.computerID,

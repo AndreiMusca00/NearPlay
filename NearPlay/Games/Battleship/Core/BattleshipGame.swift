@@ -1,7 +1,7 @@
 import Foundation
 
 struct BattleshipGame {
-    static let boardSize = 8
+    nonisolated static let boardSize = 8
 
     private(set) var ownBoard = BattleshipLocalBoard()
     private(set) var opponentBoard = BattleshipOpponentBoard()
@@ -305,8 +305,9 @@ struct BattleshipGame {
         return ownBoard.allShipsPlaced
     }
 
-    static func isInsideBoard(_ coordinate: BattleshipCoordinate) -> Bool {
-        coordinate.row >= 0 && coordinate.row < boardSize &&
-        coordinate.column >= 0 && coordinate.column < boardSize
+    nonisolated static func isInsideBoard(_ coordinate: BattleshipCoordinate) -> Bool {
+        coordinate.row >= 0 && coordinate.row < Self.boardSize &&
+        coordinate.column >= 0 && coordinate.column < Self.boardSize
     }
 }
+
