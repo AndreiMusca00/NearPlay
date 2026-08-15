@@ -292,7 +292,12 @@ struct GamesListView: View {
         HStack(spacing: 12) {
             NavigationLink(value: game) {
                 HStack(spacing: 14) {
-                    gameIcon(for: game)
+                    GameIconView(
+                        game: game,
+                        size: 64,
+                        cornerRadius: 17,
+                        symbolSize: 25
+                    )
 
                     VStack(
                         alignment: .leading,
@@ -370,100 +375,7 @@ struct GamesListView: View {
         .padding(.vertical, 12)
     }
 
-    // MARK: - Game icon
-
-    private func gameIcon(
-        for game: Game
-    ) -> some View {
-        let color = iconColor(for: game.title)
-
-        return Image(
-            systemName: icon(for: game.title)
-        )
-        .font(
-            .system(
-                size: 25,
-                weight: .semibold
-            )
-        )
-        .foregroundStyle(color)
-        .frame(width: 64, height: 64)
-        .background {
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-            .fill(color.opacity(0.09))
-        }
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: 17,
-                style: .continuous
-            )
-            .stroke(
-                color.opacity(0.25),
-                lineWidth: 1
-            )
-        }
-    }
-
-    private func icon(
-        for title: String
-    ) -> String {
-        switch title {
-        case "Tic-Tac-Toe":
-            return "grid"
-
-        case "Connect Four":
-            return "circle.grid.3x3.fill"
-
-        case "Rock Paper Scissors":
-            return "hand.raised.fill"
-
-        case "Backgammon":
-            return "die.face.5.fill"
-
-        case "Minesweeper":
-            return "flag.fill"
-
-        case "Snake":
-            return "point.topleft.down.curvedto.point.bottomright.up"
-
-        default:
-            return "gamecontroller.fill"
-        }
-    }
-
-    private func iconColor(
-        for title: String
-    ) -> Color {
-        switch title {
-        case "Tic-Tac-Toe":
-            return .cyan
-
-        case "Connect Four":
-            return .yellow
-
-        case "Rock Paper Scissors":
-            return .purple
-
-        case "Backgammon":
-            return .red
-
-        case "Minesweeper":
-            return .green
-
-        case "Snake":
-            return Color(
-                red: 0.25,
-                green: 0.95,
-                blue: 0.25
-            )
-
-        default:
-            return .blue
-        }
-    }
+    // MARK: - Game metadata
 
     private func playerText(
         for game: Game

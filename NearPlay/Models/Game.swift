@@ -71,7 +71,12 @@ extension Game {
         maxPlayers: 2,
         imageName: "game_tic_tac_toe",
         fallbackSystemImage: "grid",
-        accentHex: "#18C8FF"
+        accentHex: "#18C8FF",
+        supportedModes: [
+            .nearby,
+            .local,
+            .computer
+        ]
     )
 
     static let rockPaperScissors = Game(
@@ -82,7 +87,12 @@ extension Game {
         maxPlayers: 2,
         imageName: "game_rock_paper_scissors",
         fallbackSystemImage: "hand.raised.fill",
-        accentHex: "#914DFF"
+        accentHex: "#914DFF",
+        supportedModes: [
+            .nearby,
+            .local,
+            .computer
+        ]
     )
 
 

@@ -1,8 +1,3 @@
-//
-//  GameEntryView.swift
-//  NearPlay
-//
-
 import SwiftUI
 
 struct GameEntryView: View {
@@ -80,6 +75,11 @@ struct GameEntryView: View {
     @ViewBuilder
     private var localDestination: some View {
         switch game.id {
+        case Game.ticTacToe.id:
+            TicTacToeLocalView(
+                game: game
+            )
+
         case Game.connectFour.id:
             ConnectFourLocalView(
                 game: game
@@ -97,6 +97,13 @@ struct GameEntryView: View {
     @ViewBuilder
     private var computerDestination: some View {
         switch game.id {
+        case Game.ticTacToe.id:
+            TicTacToeComputerView(
+                game: game,
+                difficulty:
+                    selectedDifficulty
+            )
+
         case Game.connectFour.id:
             ConnectFourComputerView(
                 game: game,

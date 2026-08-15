@@ -154,35 +154,12 @@ struct GameModeSelectionView: View {
 
             Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(
-                        Color.white.opacity(0.055)
-                    )
-                    .frame(width: 46, height: 46)
-
-                Circle()
-                    .stroke(
-                        Color.white.opacity(0.12),
-                        lineWidth: 1
-                    )
-                    .frame(width: 46, height: 46)
-
-                Image(
-                    systemName:
-                        game.fallbackSystemImage
-                )
-                .font(
-                    .system(
-                        size: 18,
-                        weight: .semibold
-                    )
-                )
-                .foregroundStyle(
-                    GameModeSelectionTheme
-                        .primaryGradient
-                )
-            }
+            GameIconView(
+                game: game,
+                size: 46,
+                cornerRadius: 23,
+                symbolSize: 18
+            )
         }
         .padding(.bottom, 5)
     }

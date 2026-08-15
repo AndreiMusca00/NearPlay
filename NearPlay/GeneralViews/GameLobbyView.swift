@@ -35,7 +35,7 @@ struct GameLobbyView: View {
     @State private var frozenDiscoveredPeers: [NearbyPeer]?
 
     // Tic-Tac-Toe
-    @State private var localMark: TicTacToeMark?
+
     @State private var ticTacToeStartPayload: TicTacToeStartPayload?
 
     // Rock Paper Scissors
@@ -876,14 +876,23 @@ struct GameLobbyView: View {
     }
 
     private func startTicTacToe() {
-        guard let firstPeer = connectedOpponent else {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
             isStartingGame = false
             return
         }
 
         let payload = TicTacToeStartPayload(
-            xPlayerName: safePlayerName,
-            oPlayerName: firstPeer.displayName
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState:
+                TicTacToeGame.makeInitialState(
+                    startingPlayerID:
+                        nearbyService.localPlayerID
+                )
         )
 
         do {
@@ -898,7 +907,6 @@ struct GameLobbyView: View {
 
             nearbyService.send(message)
 
-            localMark = .x
             ticTacToeStartPayload = payload
             shouldStartGame = true
         } catch {
@@ -1148,7 +1156,6 @@ struct GameLobbyView: View {
                 from: data
             )
 
-            localMark = .o
             ticTacToeStartPayload = payload
             isStartingGame = true
             shouldStartGame = true
@@ -1263,20 +1270,36 @@ struct GameLobbyView: View {
                 game: game,
                 nearbyService: nearbyService,
                 localPlayerName: safePlayerName,
-                localMark: localMark ?? .o,
                 startPayload:
                     ticTacToeStartPayload ??
                     TicTacToeStartPayload(
-                        xPlayerName: safePlayerName,
-                        oPlayerName:
+                        sessionID:
+                            nearbyService
+                            .lobbySession?
+                            .sessionID ??
+                            UUID().uuidString,
+                        playerOneID:
+                            nearbyService.localPlayerID,
+                        playerOneName:
+                            safePlayerName,
+                        playerTwoID:
                             nearbyService
                             .connectedPeers
                             .first?
-                            .displayName ?? "Peer"
+                            .id ?? "peer",
+                        playerTwoName:
+                            nearbyService
+                            .connectedPeers
+                            .first?
+                            .displayName ?? "Peer",
+                        initialState:
+                            TicTacToeGame.makeInitialState(
+                                startingPlayerID:
+                                    nearbyService.localPlayerID
+                            )
                     ),
                 onExitToHome: exitToHome
             )
-
         case Game.rockPaperScissors.id:
             RPSView(
                 game: game,
