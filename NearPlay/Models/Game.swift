@@ -27,6 +27,10 @@ struct Game: Identifiable, Hashable {
     // Modurile disponibile. Jocurile vechi rămân Nearby implicit.
     let supportedModes: Set<GamePlayMode>
 
+    // nil = joc gratuit. Pentru un joc premium, pune aici exact Product ID-ul
+    // configurat în StoreKit / App Store Connect.
+    let productID: String?
+
     init(
         id: String,
         title: String,
@@ -36,7 +40,8 @@ struct Game: Identifiable, Hashable {
         imageName: String,
         fallbackSystemImage: String,
         accentHex: String,
-        supportedModes: Set<GamePlayMode> = [.nearby]
+        supportedModes: Set<GamePlayMode> = [.nearby],
+        productID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -47,6 +52,11 @@ struct Game: Identifiable, Hashable {
         self.fallbackSystemImage = fallbackSystemImage
         self.accentHex = accentHex
         self.supportedModes = supportedModes
+        self.productID = productID
+    }
+
+    var isFree: Bool {
+        productID == nil
     }
 
     var playerCountText: String {
@@ -109,7 +119,8 @@ extension Game {
             .nearby,
             .local,
             .computer
-        ]
+        ],
+        productID: "com.nearplay.numberrush"
     )
 
 
@@ -154,4 +165,8 @@ extension Game {
         battleship,
         connectFour
     ]
+
+    static var purchasableProductIDs: [String] {
+        Array(Set(all.compactMap(\.productID))).sorted()
+    }
 }

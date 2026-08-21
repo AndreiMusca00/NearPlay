@@ -7,9 +7,12 @@ struct GamesListView: View {
     @Environment(\._favoriteGameIDsBinding)
     private var favoriteGameIDs: Binding<Set<String>>
 
+    @EnvironmentObject private var purchaseManager: PurchaseManager
+
     @State private var isEditingName = false
     @State private var selectedFilter: GamesFilter = .all
     @State private var navigationPath = NavigationPath()
+    @State private var selectedGameForPurchase: Game?
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -55,6 +58,16 @@ struct GamesListView: View {
                 EditNameSheet(name: playerName)
                     .presentationDetents([.medium])
                     .preferredColorScheme(.dark)
+            }
+            .sheet(item: $selectedGameForPurchase) { game in
+                GamePurchaseSheet(game: game) {
+                    selectedGameForPurchase = nil
+                    navigationPath.append(game)
+                }
+                .environmentObject(purchaseManager)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+                .preferredColorScheme(.dark)
             }
             .preferredColorScheme(.dark)
         }
@@ -290,39 +303,18 @@ struct GamesListView: View {
 
     private func gameRow(_ game: Game) -> some View {
         HStack(spacing: 12) {
-            NavigationLink(value: game) {
-                HStack(spacing: 14) {
-                    GameIconView(
-                        game: game,
-                        size: 64,
-                        cornerRadius: 17,
-                        symbolSize: 25
-                    )
-
-                    VStack(
-                        alignment: .leading,
-                        spacing: 6
-                    ) {
-                        Text(game.title)
-                            .font(
-                                .system(
-                                    size: 19,
-                                    weight: .semibold
-                                )
-                            )
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-
-                        Text(playerText(for: game))
-                            .font(.system(size: 15))
-                            .foregroundStyle(
-                                Color.white.opacity(0.5)
-                            )
+            Group {
+                if purchaseManager.isUnlocked(game) {
+                    NavigationLink(value: game) {
+                        gameMainContent(game)
                     }
-
-                    Spacer()
+                } else {
+                    Button {
+                        selectedGameForPurchase = game
+                    } label: {
+                        gameMainContent(game)
+                    }
                 }
-                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -359,6 +351,51 @@ struct GamesListView: View {
                     : "Add to liked games"
             )
 
+            accessIndicator(for: game)
+        }
+        .padding(.leading, 20)
+        .padding(.trailing, 18)
+        .padding(.vertical, 12)
+    }
+
+    private func gameMainContent(_ game: Game) -> some View {
+        HStack(spacing: 14) {
+            GameIconView(
+                game: game,
+                size: 64,
+                cornerRadius: 17,
+                symbolSize: 25
+            )
+
+            VStack(
+                alignment: .leading,
+                spacing: 6
+            ) {
+                Text(game.title)
+                    .font(
+                        .system(
+                            size: 19,
+                            weight: .semibold
+                        )
+                    )
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Text(playerText(for: game))
+                    .font(.system(size: 15))
+                    .foregroundStyle(
+                        Color.white.opacity(0.5)
+                    )
+            }
+
+            Spacer()
+        }
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func accessIndicator(for game: Game) -> some View {
+        if purchaseManager.isUnlocked(game) {
             Image(systemName: "chevron.right")
                 .font(
                     .system(
@@ -369,10 +406,22 @@ struct GamesListView: View {
                 .foregroundStyle(
                     Color.white.opacity(0.3)
                 )
+        } else {
+            VStack(alignment: .trailing, spacing: 4) {
+                if let price = purchaseManager.displayPrice(for: game) {
+                    Text(price)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.62))
+                }
+
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(
+                        Color.white.opacity(0.34)
+                    )
+            }
+            .frame(minWidth: 34, alignment: .trailing)
         }
-        .padding(.leading, 20)
-        .padding(.trailing, 18)
-        .padding(.vertical, 12)
     }
 
     // MARK: - Game metadata
@@ -537,4 +586,5 @@ private enum GamesFilter {
 #Preview {
     GamesListView()
         .withPlayerNameStorage()
+        .environmentObject(PurchaseManager())
 }

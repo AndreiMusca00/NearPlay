@@ -9,6 +9,7 @@ import Foundation
 
 struct SettingsView: View {
     @Binding var playerName: String
+    @EnvironmentObject private var purchaseManager: PurchaseManager
 
     @State private var isEditingName = false
     @State private var selectedLanguage = "English"
@@ -144,21 +145,20 @@ struct SettingsView: View {
         isRestoringPurchases = true
         restoreMessage = nil
 
-        /*
-         Aici vom adăuga ulterior:
+        Task {
+            do {
+                try await purchaseManager.restorePurchases()
 
-         Task {
-             do {
-                 try await AppStore.sync()
-             } catch {
-                 // Gestionare eroare
-             }
-         }
-        */
+                if purchaseManager.purchasedGameCount > 0 {
+                    restoreMessage = "Purchases restored successfully."
+                } else {
+                    restoreMessage = "No previous purchases were found."
+                }
+            } catch {
+                restoreMessage = "Could not restore purchases. Please try again."
+            }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             isRestoringPurchases = false
-            restoreMessage = "Purchase restoration will be connected to StoreKit."
         }
     }
 }
