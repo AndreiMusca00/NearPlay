@@ -19,21 +19,28 @@ struct GamesListView: View {
             ZStack {
                 appBackground
 
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        topHeader
-                            .padding(.horizontal, 20)
-                            .padding(.top, 12)
+                VStack(spacing: 0) {
 
-                        filterButtons
-                            .padding(.horizontal, 20)
-                            .padding(.top, 28)
-                            .padding(.bottom, 16)
+                    // MARK: Fixed Header
 
-                        Divider()
-                            .overlay(Color.white.opacity(0.08))
-                            .padding(.horizontal, 20)
+                    topHeader
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
 
+                    // MARK: Fixed Filters
+
+                    filterButtons
+                        .padding(.horizontal, 20)
+                        .padding(.top, 28)
+                        .padding(.bottom, 16)
+
+                    Divider()
+                        .overlay(Color.white.opacity(0.08))
+                        .padding(.horizontal, 20)
+
+                    // MARK: Scrollable Games Area
+
+                    ScrollView {
                         if filteredGames.isEmpty {
                             emptyFavoritesView
                                 .padding(.top, 70)
@@ -41,11 +48,17 @@ struct GamesListView: View {
                             gamesList
                         }
                     }
+                    .scrollIndicators(.hidden)
                     .padding(.bottom, 30)
                 }
-                .scrollIndicators(.hidden)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .top
+                )
             }
             .toolbar(.hidden, for: .navigationBar)
+
             .navigationDestination(for: Game.self) { game in
                 GameEntryView(
                     game: game,
@@ -54,11 +67,13 @@ struct GamesListView: View {
                     }
                 )
             }
+
             .sheet(isPresented: $isEditingName) {
                 EditNameSheet(name: playerName)
                     .presentationDetents([.medium])
                     .preferredColorScheme(.dark)
             }
+
             .sheet(item: $selectedGameForPurchase) { game in
                 GamePurchaseSheet(game: game) {
                     selectedGameForPurchase = nil
@@ -69,6 +84,7 @@ struct GamesListView: View {
                 .presentationDragIndicator(.visible)
                 .preferredColorScheme(.dark)
             }
+
             .preferredColorScheme(.dark)
         }
     }
@@ -279,7 +295,7 @@ struct GamesListView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Games list
+    // MARK: - Games List
 
     private var gamesList: some View {
         LazyVStack(spacing: 0) {
@@ -394,7 +410,9 @@ struct GamesListView: View {
     }
 
     @ViewBuilder
-    private func accessIndicator(for game: Game) -> some View {
+    private func accessIndicator(
+        for game: Game
+    ) -> some View {
         if purchaseManager.isUnlocked(game) {
             Image(systemName: "chevron.right")
                 .font(
@@ -407,24 +425,44 @@ struct GamesListView: View {
                     Color.white.opacity(0.3)
                 )
         } else {
-            VStack(alignment: .trailing, spacing: 4) {
-                if let price = purchaseManager.displayPrice(for: game) {
+            VStack(
+                alignment: .trailing,
+                spacing: 4
+            ) {
+                if let price =
+                    purchaseManager.displayPrice(for: game) {
+
                     Text(price)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.62))
+                        .font(
+                            .system(
+                                size: 12,
+                                weight: .semibold
+                            )
+                        )
+                        .foregroundStyle(
+                            Color.white.opacity(0.62)
+                        )
                 }
 
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(
+                        .system(
+                            size: 13,
+                            weight: .semibold
+                        )
+                    )
                     .foregroundStyle(
                         Color.white.opacity(0.34)
                     )
             }
-            .frame(minWidth: 34, alignment: .trailing)
+            .frame(
+                minWidth: 34,
+                alignment: .trailing
+            )
         }
     }
 
-    // MARK: - Game metadata
+    // MARK: - Game Metadata
 
     private func playerText(
         for game: Game
@@ -487,7 +525,7 @@ struct GamesListView: View {
         String(describing: game.id)
     }
 
-    // MARK: - Empty favorites
+    // MARK: - Empty Favorites
 
     private var emptyFavoritesView: some View {
         VStack(spacing: 14) {
