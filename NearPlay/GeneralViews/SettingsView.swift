@@ -4,6 +4,7 @@
 //
 //  Created by Andrei Musca on 29/07/2026.
 //
+
 import SwiftUI
 import Foundation
 
@@ -15,6 +16,20 @@ struct SettingsView: View {
     @State private var selectedLanguage = "English"
     @State private var isRestoringPurchases = false
     @State private var restoreMessage: String?
+
+    // MARK: - Legal URLs
+
+    private let privacyPolicyURL = URL(
+        string: "https://sites.google.com/view/nearplay-privacypolicy/home"
+    )!
+
+    private let termsOfUseURL = URL(
+        string: "https://sites.google.com/view/nearplay-termsofuse/home"
+    )!
+
+    private let supportURL = URL(
+        string: "https://sites.google.com/view/nearplay-contact/home"
+    )!
 
     var body: some View {
         ZStack {
@@ -37,6 +52,9 @@ struct SettingsView: View {
             .ignoresSafeArea()
 
             List {
+
+                // MARK: - Profile
+
                 Section("Profile") {
                     Button {
                         isEditingName = true
@@ -44,11 +62,15 @@ struct SettingsView: View {
                         SettingsRow(
                             icon: "person.fill",
                             title: "Player name",
-                            value: playerName.isEmpty ? "Player" : playerName
+                            value: playerName.isEmpty
+                                ? "Player"
+                                : playerName
                         )
                     }
                     .buttonStyle(.plain)
                 }
+
+                // MARK: - Purchases
 
                 Section("Purchases") {
                     Button {
@@ -62,8 +84,8 @@ struct SettingsView: View {
 
                             Text(
                                 isRestoringPurchases
-                                ? "Restoring..."
-                                : "Restore Purchases"
+                                    ? "Restoring..."
+                                    : "Restore Purchases"
                             )
                             .foregroundStyle(.white)
 
@@ -89,10 +111,15 @@ struct SettingsView: View {
                     }
                 }
 
+                // MARK: - Preferences
+
                 Section("Preferences") {
                     Picker(selection: $selectedLanguage) {
-                        Text("English").tag("English")
-                        Text("Română").tag("Română")
+                        Text("English")
+                            .tag("English")
+
+                        Text("Română")
+                            .tag("Română")
                     } label: {
                         HStack(spacing: 14) {
                             SettingsIcon(
@@ -105,6 +132,40 @@ struct SettingsView: View {
                         }
                     }
                 }
+
+                // MARK: - Legal & Support
+
+                Section("Legal & Support") {
+
+                    Link(destination: privacyPolicyURL) {
+                        SettingsLinkRow(
+                            icon: "hand.raised.fill",
+                            iconColor: .blue,
+                            title: "Privacy Policy"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Link(destination: termsOfUseURL) {
+                        SettingsLinkRow(
+                            icon: "doc.text.fill",
+                            iconColor: .purple,
+                            title: "Terms of Use"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Link(destination: supportURL) {
+                        SettingsLinkRow(
+                            icon: "questionmark.circle.fill",
+                            iconColor: .cyan,
+                            title: "Support"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // MARK: - About
 
                 Section("About") {
                     SettingsRow(
@@ -127,7 +188,10 @@ struct SettingsView: View {
             ),
             for: .navigationBar
         )
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(
+            .visible,
+            for: .navigationBar
+        )
         .sheet(isPresented: $isEditingName) {
             EditNameSheet(name: $playerName)
                 .presentationDetents([.medium])
@@ -136,10 +200,15 @@ struct SettingsView: View {
         .preferredColorScheme(.dark)
     }
 
+    // MARK: - App Version
+
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"]
+        Bundle.main
+            .infoDictionary?["CFBundleShortVersionString"]
             as? String ?? "1.0"
     }
+
+    // MARK: - Restore Purchases
 
     private func restorePurchases() {
         isRestoringPurchases = true
@@ -150,18 +219,25 @@ struct SettingsView: View {
                 try await purchaseManager.restorePurchases()
 
                 if purchaseManager.purchasedGameCount > 0 {
-                    restoreMessage = "Purchases restored successfully."
+                    restoreMessage =
+                        "Purchases restored successfully."
                 } else {
-                    restoreMessage = "No previous purchases were found."
+                    restoreMessage =
+                        "No previous purchases were found."
                 }
+
             } catch {
-                restoreMessage = "Could not restore purchases. Please try again."
+                restoreMessage =
+                    "Could not restore purchases. Please try again."
             }
 
             isRestoringPurchases = false
         }
     }
 }
+
+// MARK: - Settings Row
+
 private struct SettingsRow: View {
     let icon: String
     let title: String
@@ -185,10 +261,48 @@ private struct SettingsRow: View {
 
             Image(systemName: "chevron.right")
                 .font(.caption.bold())
-                .foregroundStyle(Color.white.opacity(0.3))
+                .foregroundStyle(
+                    Color.white.opacity(0.3)
+                )
         }
     }
 }
+
+// MARK: - Link Row
+
+private struct SettingsLinkRow: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            SettingsIcon(
+                systemName: icon,
+                color: iconColor
+            )
+
+            Text(title)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Image(systemName: "arrow.up.right")
+                .font(
+                    .system(
+                        size: 12,
+                        weight: .semibold
+                    )
+                )
+                .foregroundStyle(
+                    Color.white.opacity(0.3)
+                )
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Settings Icon
 
 private struct SettingsIcon: View {
     let systemName: String
@@ -196,15 +310,25 @@ private struct SettingsIcon: View {
 
     var body: some View {
         Image(systemName: systemName)
-            .font(.system(size: 15, weight: .semibold))
+            .font(
+                .system(
+                    size: 15,
+                    weight: .semibold
+                )
+            )
             .foregroundStyle(color)
-            .frame(width: 30, height: 30)
+            .frame(
+                width: 30,
+                height: 30
+            )
             .background(
                 RoundedRectangle(
                     cornerRadius: 8,
                     style: .continuous
                 )
-                .fill(color.opacity(0.13))
+                .fill(
+                    color.opacity(0.13)
+                )
             )
     }
 }
