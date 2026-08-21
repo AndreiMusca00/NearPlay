@@ -33,149 +33,130 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(
-                        red: 11.0 / 255.0,
-                        green: 15.0 / 255.0,
-                        blue: 21.0 / 255.0
-                    ),
-                    Color(
-                        red: 7.0 / 255.0,
-                        green: 16.0 / 255.0,
-                        blue: 24.0 / 255.0
-                    )
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            appBackground
 
-            List {
+            VStack(spacing: 0) {
 
-                // MARK: - Profile
+                List {
 
-                Section("Profile") {
-                    Button {
-                        isEditingName = true
-                    } label: {
-                        SettingsRow(
-                            icon: "person.fill",
-                            title: "Player name",
-                            value: playerName.isEmpty
-                                ? "Player"
-                                : playerName
-                        )
+                    // MARK: - Profile
+
+                    Section("Profile") {
+                        Button {
+                            isEditingName = true
+                        } label: {
+                            SettingsRow(
+                                icon: "person.fill",
+                                title: "Player name",
+                                value: playerName.isEmpty
+                                    ? "Player"
+                                    : playerName
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                }
 
-                // MARK: - Purchases
+                    // MARK: - Purchases
 
-                Section("Purchases") {
-                    Button {
-                        restorePurchases()
-                    } label: {
-                        HStack(spacing: 14) {
-                            SettingsIcon(
-                                systemName: "arrow.clockwise",
-                                color: .purple
-                            )
+                    Section("Purchases") {
+                        Button {
+                            restorePurchases()
+                        } label: {
+                            HStack(spacing: 14) {
+                                SettingsIcon(
+                                    systemName: "arrow.clockwise",
+                                    color: .purple
+                                )
 
-                            Text(
-                                isRestoringPurchases
-                                    ? "Restoring..."
-                                    : "Restore Purchases"
-                            )
-                            .foregroundStyle(.white)
+                                Text(
+                                    isRestoringPurchases
+                                        ? "Restoring..."
+                                        : "Restore Purchases"
+                                )
+                                .foregroundStyle(.white)
 
-                            Spacer()
+                                Spacer()
 
-                            if isRestoringPurchases {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(
-                                        Color.white.opacity(0.3)
-                                    )
+                                if isRestoringPurchases {
+                                    ProgressView()
+                                } else {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(
+                                            Color.white.opacity(0.3)
+                                        )
+                                }
+                            }
+                        }
+                        .disabled(isRestoringPurchases)
+
+                        if let restoreMessage {
+                            Text(restoreMessage)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    // MARK: - Preferences
+
+                    Section("Preferences") {
+                        Picker(selection: $selectedLanguage) {
+                            Text("English")
+                                .tag("English")
+
+                            Text("Română")
+                                .tag("Română")
+                        } label: {
+                            HStack(spacing: 14) {
+                                SettingsIcon(
+                                    systemName: "globe",
+                                    color: .cyan
+                                )
+
+                                Text("Language")
+                                    .foregroundStyle(.white)
                             }
                         }
                     }
-                    .disabled(isRestoringPurchases)
 
-                    if let restoreMessage {
-                        Text(restoreMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                    // MARK: - Legal & Support
 
-                // MARK: - Preferences
+                    Section("Legal & Support") {
 
-                Section("Preferences") {
-                    Picker(selection: $selectedLanguage) {
-                        Text("English")
-                            .tag("English")
-
-                        Text("Română")
-                            .tag("Română")
-                    } label: {
-                        HStack(spacing: 14) {
-                            SettingsIcon(
-                                systemName: "globe",
-                                color: .cyan
+                        Link(destination: privacyPolicyURL) {
+                            SettingsLinkRow(
+                                icon: "hand.raised.fill",
+                                iconColor: .blue,
+                                title: "Privacy Policy"
                             )
-
-                            Text("Language")
-                                .foregroundStyle(.white)
                         }
+                        .buttonStyle(.plain)
+
+                        Link(destination: termsOfUseURL) {
+                            SettingsLinkRow(
+                                icon: "doc.text.fill",
+                                iconColor: .purple,
+                                title: "Terms of Use"
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        Link(destination: supportURL) {
+                            SettingsLinkRow(
+                                icon: "questionmark.circle.fill",
+                                iconColor: .cyan,
+                                title: "Support"
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
+                .scrollContentBackground(.hidden)
 
-                // MARK: - Legal & Support
+                // MARK: - Footer
 
-                Section("Legal & Support") {
-
-                    Link(destination: privacyPolicyURL) {
-                        SettingsLinkRow(
-                            icon: "hand.raised.fill",
-                            iconColor: .blue,
-                            title: "Privacy Policy"
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    Link(destination: termsOfUseURL) {
-                        SettingsLinkRow(
-                            icon: "doc.text.fill",
-                            iconColor: .purple,
-                            title: "Terms of Use"
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    Link(destination: supportURL) {
-                        SettingsLinkRow(
-                            icon: "questionmark.circle.fill",
-                            iconColor: .cyan,
-                            title: "Support"
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                // MARK: - About
-
-                Section("About") {
-                    SettingsRow(
-                        icon: "info.circle.fill",
-                        title: "Version",
-                        value: appVersion
-                    )
-                }
+                settingsFooter
             }
-            .scrollContentBackground(.hidden)
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
@@ -200,12 +181,73 @@ struct SettingsView: View {
         .preferredColorScheme(.dark)
     }
 
+    // MARK: - Background
+
+    private var appBackground: some View {
+        LinearGradient(
+            colors: [
+                Color(
+                    red: 11.0 / 255.0,
+                    green: 15.0 / 255.0,
+                    blue: 21.0 / 255.0
+                ),
+                Color(
+                    red: 7.0 / 255.0,
+                    green: 16.0 / 255.0,
+                    blue: 24.0 / 255.0
+                )
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+
+    // MARK: - Footer
+
+    private var settingsFooter: some View {
+        VStack(spacing: 6) {
+            Text("Version \(appVersion) (\(buildNumber))")
+                .font(
+                    .system(
+                        size: 12,
+                        weight: .medium
+                    )
+                )
+                .foregroundStyle(
+                    Color.white.opacity(0.32)
+                )
+
+            Text("Powered by Fly Technology & Innovation")
+                .font(
+                    .system(
+                        size: 12,
+                        weight: .medium
+                    )
+                )
+                .foregroundStyle(
+                    Color.white.opacity(0.48)
+                )
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
+    }
+
     // MARK: - App Version
 
     private var appVersion: String {
         Bundle.main
             .infoDictionary?["CFBundleShortVersionString"]
             as? String ?? "1.0"
+    }
+
+    // MARK: - Build Number
+
+    private var buildNumber: String {
+        Bundle.main
+            .infoDictionary?["CFBundleVersion"]
+            as? String ?? "1"
     }
 
     // MARK: - Restore Purchases
