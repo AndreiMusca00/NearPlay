@@ -481,14 +481,36 @@ struct GamesListView: View {
     // MARK: - Favorites
 
     private var filteredGames: [Game] {
+        let games: [Game]
+
         switch selectedFilter {
         case .all:
-            return Game.all
+            games = Game.all
 
         case .liked:
-            return Game.all.filter { game in
+            games = Game.all.filter { game in
                 isFavorite(game)
             }
+        }
+
+        return games.sorted { firstGame, secondGame in
+            let firstIsUnlocked =
+                purchaseManager.isUnlocked(firstGame)
+
+            let secondIsUnlocked =
+                purchaseManager.isUnlocked(secondGame)
+
+            // Free / unlocked games first.
+            // Locked premium games go to the bottom.
+            if firstIsUnlocked != secondIsUnlocked {
+                return firstIsUnlocked
+            }
+
+            // Alphabetical order inside each group.
+            return firstGame.title
+                .localizedCaseInsensitiveCompare(
+                    secondGame.title
+                ) == .orderedAscending
         }
     }
 
