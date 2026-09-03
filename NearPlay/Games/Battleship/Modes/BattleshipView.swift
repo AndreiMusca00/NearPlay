@@ -30,10 +30,6 @@ struct BattleshipView: View {
     @State private var isQuitting = false
     @State private var showResultOverlay = false
 
-    @State private var feedbackText: String?
-    @State private var feedbackTone:
-        BattleshipFeedbackTone = .neutral
-
     init(
         game: Game,
         nearbyService: NearbyService,
@@ -137,18 +133,6 @@ struct BattleshipView: View {
                 }
             }
 
-            if let feedbackText {
-                feedbackBanner(
-                    feedbackText,
-                    tone: feedbackTone
-                )
-                .transition(
-                    .move(edge: .top)
-                    .combined(with: .opacity)
-                )
-                .zIndex(8)
-            }
-
             if battleship.phase == .finished &&
                 showResultOverlay {
                 GameResultOverlay(
@@ -210,7 +194,6 @@ struct BattleshipView: View {
 
             battleship.resetForRematch()
             pendingAttack = false
-            feedbackText = nil
 
             // Alternarea jucătorului care începe este calculată
             // când ambii dau Ready pentru noua rundă.
@@ -505,10 +488,6 @@ struct BattleshipView: View {
             type: .gameState
         )
 
-        showFeedback(
-            "Battle started",
-            tone: .success
-        )
     }
 
     // MARK: - Attack
@@ -626,11 +605,6 @@ struct BattleshipView: View {
             response,
             type: .gameState
         )
-
-        showAttackFeedback(
-            result.outcome,
-            isLocalAttack: false
-        )
     }
 
     private func applyAttackResult(
@@ -660,11 +634,6 @@ struct BattleshipView: View {
         )
 
         pendingAttack = false
-
-        showAttackFeedback(
-            payload.outcome,
-            isLocalAttack: true
-        )
     }
 
     // MARK: - Incoming messages
@@ -724,11 +693,6 @@ struct BattleshipView: View {
                         started.startingPlayerID,
                     turnID: started.turnID
                 )
-
-                showFeedback(
-                    "Battle started",
-                    tone: .success
-                )
                 return
             }
 
@@ -774,107 +738,6 @@ struct BattleshipView: View {
                 "Battleship payload encoding failed: \(error)"
             )
         }
-    }
-
-    // MARK: - Feedback
-
-    private func showAttackFeedback(
-        _ outcome: BattleshipAttackOutcome,
-        isLocalAttack: Bool
-    ) {
-        let prefix =
-            isLocalAttack ? "" : "Enemy: "
-
-        switch outcome {
-        case .miss:
-            showFeedback(
-                "\(prefix)Miss",
-                tone: .neutral
-            )
-
-        case .hit:
-            showFeedback(
-                "\(prefix)Hit!",
-                tone: .warning
-            )
-
-        case .sunk:
-            showFeedback(
-                "\(prefix)Ship sunk!",
-                tone: .danger
-            )
-
-        case .gameOver:
-            showFeedback(
-                isLocalAttack
-                ? "Enemy fleet destroyed!"
-                : "Your fleet was destroyed",
-                tone:
-                    isLocalAttack
-                    ? .success
-                    : .danger
-            )
-        }
-    }
-
-    private func showFeedback(
-        _ text: String,
-        tone: BattleshipFeedbackTone
-    ) {
-        feedbackText = text
-        feedbackTone = tone
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            withAnimation(.easeOut(duration: 0.18)) {
-                if feedbackText == text {
-                    feedbackText = nil
-                }
-            }
-        }
-    }
-
-    private func feedbackBanner(
-        _ text: String,
-        tone: BattleshipFeedbackTone
-    ) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: tone.iconName)
-                .font(.system(size: 17, weight: .bold))
-
-            Text(text)
-                .font(
-                    .system(
-                        size: 15,
-                        weight: .bold,
-                        design: .rounded
-                    )
-                )
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 18)
-        .frame(height: 48)
-        .background {
-            Capsule()
-                .fill(tone.color.opacity(0.88))
-        }
-        .overlay {
-            Capsule()
-                .stroke(
-                    Color.white.opacity(0.26),
-                    lineWidth: 1
-                )
-        }
-        .shadow(
-            color: tone.color.opacity(0.42),
-            radius: 12
-        )
-        .frame(
-            maxHeight: .infinity,
-            alignment: .top
-        )
-        .padding(.top, 74)
     }
 
     // MARK: - Quit

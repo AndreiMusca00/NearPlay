@@ -37,9 +37,6 @@ struct ConnectFourView: View {
     @State private var isQuitting = false
     @State private var showResultOverlay = false
 
-    @State private var feedback:
-        ConnectFourFeedbackMessage?
-
     init(
         game: Game,
         nearbyService: NearbyService,
@@ -116,7 +113,6 @@ struct ConnectFourView: View {
                 showsProgress:
                     pendingMove ||
                     awaitingRoundReset,
-                feedback: feedback,
                 onColumnSelected:
                     selectColumn,
                 onQuitRequested: {
@@ -178,7 +174,6 @@ struct ConnectFourView: View {
 
             showResultOverlay = false
             pendingMove = false
-            feedback = nil
 
             let startingPlayerID =
                 confirmedRound.isMultiple(of: 2)
@@ -314,24 +309,11 @@ struct ConnectFourView: View {
                     : .warning
                 )
 
-            showFeedback(
-                isLocalMove
-                ? "Connect Four!"
-                : "Opponent connected four",
-                tone:
-                    isLocalMove
-                    ? .success
-                    : .danger
-            )
 
         case .draw:
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "Board full — draw",
-                tone: .neutral
-            )
         }
 
         broadcastAuthoritativeState()
@@ -408,15 +390,6 @@ struct ConnectFourView: View {
         if previousWinner == nil,
            let winner =
             newState.winnerPlayerID {
-            showFeedback(
-                winner == localPlayerID
-                ? "Connect Four!"
-                : "Opponent connected four",
-                tone:
-                    winner == localPlayerID
-                    ? .success
-                    : .danger
-            )
         }
     }
 
@@ -505,30 +478,6 @@ struct ConnectFourView: View {
             print(
                 "Connect Four payload encoding failed: \(error)"
             )
-        }
-    }
-
-    // MARK: - Feedback
-
-    private func showFeedback(
-        _ text: String,
-        tone: ConnectFourFeedbackTone
-    ) {
-        feedback = ConnectFourFeedbackMessage(
-            text: text,
-            tone: tone
-        )
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            if feedback?.text == text {
-                withAnimation(
-                    .easeOut(duration: 0.18)
-                ) {
-                    feedback = nil
-                }
-            }
         }
     }
 

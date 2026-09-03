@@ -7,38 +7,7 @@ struct TicTacToePlayerPresentation: Identifiable, Equatable {
     let inactiveBadge: String
 }
 
-enum TicTacToeFeedbackTone {
-    case neutral
-    case success
-    case danger
 
-    var color: Color {
-        switch self {
-        case .neutral:
-            return TicTacToeTheme.xBlue
-        case .success:
-            return .green
-        case .danger:
-            return .red
-        }
-    }
-
-    var iconName: String {
-        switch self {
-        case .neutral:
-            return "circle.dotted"
-        case .success:
-            return "checkmark.circle.fill"
-        case .danger:
-            return "xmark.octagon.fill"
-        }
-    }
-}
-
-struct TicTacToeFeedbackMessage: Equatable {
-    let text: String
-    let tone: TicTacToeFeedbackTone
-}
 
 struct TicTacToeGameScreen: View {
     let gameTitle: String
@@ -56,7 +25,6 @@ struct TicTacToeGameScreen: View {
 
     let isInteractionEnabled: Bool
     let showsProgress: Bool
-    let feedback: TicTacToeFeedbackMessage?
 
     let onCellSelected: (Int) -> Void
     let onQuitRequested: () -> Void
@@ -111,14 +79,6 @@ struct TicTacToeGameScreen: View {
                 }
             }
 
-            if let feedback {
-                feedbackBanner(feedback)
-                    .transition(
-                        .move(edge: .top)
-                        .combined(with: .opacity)
-                    )
-                    .zIndex(8)
-            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
@@ -400,32 +360,6 @@ struct TicTacToeGameScreen: View {
             }
     }
 
-    private func feedbackBanner(
-        _ feedback: TicTacToeFeedbackMessage
-    ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: feedback.tone.iconName)
-            Text(feedback.text)
-                .lineLimit(2)
-        }
-        .font(
-            .system(
-                size: 14,
-                weight: .semibold,
-                design: .rounded
-            )
-        )
-        .foregroundStyle(.white)
-        .padding(.horizontal, 16)
-        .frame(height: 48)
-        .background {
-            Capsule()
-                .fill(
-                    feedback.tone.color.opacity(0.88)
-                )
-        }
-        .padding(.top, 18)
-    }
 
     private var activeMark: TicTacToeMark {
         if controller.state.activePlayerID == firstPlayer.id {

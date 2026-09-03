@@ -12,13 +12,11 @@ struct BattleshipComputerView: View {
     @State private var computerGame = BattleshipGame()
 
     @State private var roundNumber = 0
+    @State private var sessionScore = GameSessionScore()
     @State private var pendingAttack = false
     @State private var computerThinking = false
     @State private var showQuitConfirmation = false
     @State private var showResultOverlay = false
-
-    @State private var feedbackText: String?
-    @State private var feedbackTone: BattleshipFeedbackTone = .neutral
     @State private var computerTask: Task<Void, Never>?
 
     private static let humanID =
@@ -92,25 +90,21 @@ struct BattleshipComputerView: View {
                 }
             }
 
-            if let feedbackText {
-                feedbackBanner(
-                    feedbackText,
-                    tone: feedbackTone
-                )
-                .transition(
-                    .move(edge: .top)
-                    .combined(with: .opacity)
-                )
-                .zIndex(8)
-            }
-
             if humanGame.phase == .finished &&
                 showResultOverlay {
-                BattleshipSimpleResultOverlay(
+                SimpleGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: resultSymbol,
                     accentColor: resultColor,
+                    buttonGradient: BattleshipTheme.primaryGradient,
+                    cardBackground: BattleshipTheme.cardBackground,
+                    usesGradientBorder: true,
+                    firstPlayerName: "You",
+                    secondPlayerName: "Computer",
+                    sessionScore: sessionScore,
+                    firstPlayerColor: BattleshipTheme.cyan,
+                    secondPlayerColor: BattleshipTheme.purple,
                     onPlayAgain: playAgain,
                     onQuit: {
                         computerTask?.cancel()
@@ -351,10 +345,6 @@ struct BattleshipComputerView: View {
             turnID: turnID
         )
 
-        showFeedback(
-            "Battle started",
-            tone: .success
-        )
 
         if startingPlayerID == Self.computerID {
             scheduleComputerAttack()
@@ -416,11 +406,6 @@ struct BattleshipComputerView: View {
         )
 
         pendingAttack = false
-
-        showAttackFeedback(
-            result.outcome,
-            isHumanAttack: true
-        )
 
         if result.outcome == .gameOver {
             showResultAfterDelay()
@@ -536,11 +521,6 @@ struct BattleshipComputerView: View {
 
         computerThinking = false
 
-        showAttackFeedback(
-            result.outcome,
-            isHumanAttack: false
-        )
-
         if result.outcome == .gameOver {
             showResultAfterDelay()
         }
@@ -549,6 +529,15 @@ struct BattleshipComputerView: View {
     // MARK: - Result
 
     private func showResultAfterDelay() {
+        if let winnerID {
+            sessionScore.record(
+                winnerID == Self.humanID
+                ? .firstPlayerWin
+                : .secondPlayerWin,
+                roundNumber: roundNumber
+            )
+        }
+
         DispatchQueue.main.asyncAfter(
             deadline: .now() + 0.85
         ) {
@@ -577,7 +566,6 @@ struct BattleshipComputerView: View {
         pendingAttack = false
         computerThinking = false
         showResultOverlay = false
-        feedbackText = nil
     }
 
     private var resultTitle: String {
@@ -609,106 +597,6 @@ struct BattleshipComputerView: View {
         computerGame.winnerPlayerID
     }
 
-    // MARK: - Feedback
-
-    private func showAttackFeedback(
-        _ outcome: BattleshipAttackOutcome,
-        isHumanAttack: Bool
-    ) {
-        let prefix =
-            isHumanAttack ? "" : "Computer: "
-
-        switch outcome {
-        case .miss:
-            showFeedback(
-                "\(prefix)Miss",
-                tone: .neutral
-            )
-
-        case .hit:
-            showFeedback(
-                "\(prefix)Hit!",
-                tone: .warning
-            )
-
-        case .sunk:
-            showFeedback(
-                "\(prefix)Ship sunk!",
-                tone: .danger
-            )
-
-        case .gameOver:
-            showFeedback(
-                isHumanAttack
-                ? "Enemy fleet destroyed!"
-                : "Your fleet was destroyed",
-                tone:
-                    isHumanAttack
-                    ? .success
-                    : .danger
-            )
-        }
-    }
-
-    private func showFeedback(
-        _ text: String,
-        tone: BattleshipFeedbackTone
-    ) {
-        feedbackText = text
-        feedbackTone = tone
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            withAnimation(.easeOut(duration: 0.18)) {
-                if feedbackText == text {
-                    feedbackText = nil
-                }
-            }
-        }
-    }
-
-    private func feedbackBanner(
-        _ text: String,
-        tone: BattleshipFeedbackTone
-    ) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: tone.iconName)
-                .font(.system(size: 17, weight: .bold))
-
-            Text(text)
-                .font(
-                    .system(
-                        size: 15,
-                        weight: .bold,
-                        design: .rounded
-                    )
-                )
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 18)
-        .frame(height: 48)
-        .background {
-            Capsule()
-                .fill(tone.color.opacity(0.88))
-        }
-        .overlay {
-            Capsule()
-                .stroke(
-                    Color.white.opacity(0.26),
-                    lineWidth: 1
-                )
-        }
-        .shadow(
-            color: tone.color.opacity(0.42),
-            radius: 12
-        )
-        .frame(
-            maxHeight: .infinity,
-            alignment: .top
-        )
-        .padding(.top, 74)
-    }
 
     // MARK: - Helpers
 

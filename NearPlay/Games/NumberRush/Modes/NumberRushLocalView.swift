@@ -14,6 +14,7 @@ struct NumberRushLocalView: View {
     private var controller: NumberRushMatchController
 
     @State private var roundNumber = 0
+    @State private var sessionScore = GameSessionScore()
     @State private var wrongNumber: Int?
     @State private var correctNumber: Int?
     @State private var feedback: NumberRushFeedbackMessage?
@@ -86,11 +87,19 @@ struct NumberRushLocalView: View {
 
             if controller.state.isFinished &&
                 showResultOverlay {
-                NumberRushSimpleResultOverlay(
+                SimpleGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: resultSymbolName,
                     accentColor: resultAccentColor,
+                    buttonGradient: NumberRushTheme.primaryGradient,
+                    cardBackground: NumberRushTheme.cardBackground,
+                    usesGradientBorder: false,
+                    firstPlayerName: localPlayerDisplayName,
+                    secondPlayerName: "Guest",
+                    sessionScore: sessionScore,
+                    firstPlayerColor: NumberRushTheme.blue,
+                    secondPlayerColor: NumberRushTheme.purple,
                     onPlayAgain: playAgain,
                     onQuit: {
                         timeoutWorkItem?.cancel()
@@ -133,6 +142,8 @@ struct NumberRushLocalView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            recordFinishedRound()
 
             timeoutWorkItem?.cancel()
 
@@ -233,6 +244,24 @@ struct NumberRushLocalView: View {
         DispatchQueue.main.asyncAfter(
             deadline: .now() + delay,
             execute: workItem
+        )
+    }
+
+    private func recordFinishedRound() {
+        let outcome: GameSessionRoundOutcome
+
+        switch localRoundResult {
+        case .win:
+            outcome = .firstPlayerWin
+        case .loss:
+            outcome = .secondPlayerWin
+        case .draw:
+            outcome = .draw
+        }
+
+        sessionScore.record(
+            outcome,
+            roundNumber: roundNumber
         )
     }
 

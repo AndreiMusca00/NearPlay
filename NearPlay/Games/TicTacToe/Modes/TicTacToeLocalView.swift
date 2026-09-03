@@ -14,9 +14,9 @@ struct TicTacToeLocalView: View {
     private var controller: TicTacToeMatchController
 
     @State private var roundNumber = 0
+    @State private var sessionScore = GameSessionScore()
     @State private var showResultOverlay = false
     @State private var showQuitConfirmation = false
-    @State private var feedback: TicTacToeFeedbackMessage?
 
     private static let playerOneID =
         "tic_tac_toe_local_player_one"
@@ -72,7 +72,6 @@ struct TicTacToeLocalView: View {
                 isInteractionEnabled:
                     !controller.state.isFinished,
                 showsProgress: false,
-                feedback: feedback,
                 onCellSelected:
                     selectCell,
                 onQuitRequested: {
@@ -82,11 +81,19 @@ struct TicTacToeLocalView: View {
 
             if controller.state.isFinished &&
                 showResultOverlay {
-                TicTacToeSimpleResultOverlay(
+                SimpleGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: resultSymbol,
                     accentColor: resultColor,
+                    buttonGradient: TicTacToeTheme.primaryGradient,
+                    cardBackground: TicTacToeTheme.cardBackground,
+                    usesGradientBorder: false,
+                    firstPlayerName: localPlayerDisplayName,
+                    secondPlayerName: "Guest",
+                    sessionScore: sessionScore,
+                    firstPlayerColor: TicTacToeTheme.xBlue,
+                    secondPlayerColor: TicTacToeTheme.oPurple,
                     onPlayAgain: playAgain,
                     onQuit: {
                         dismiss()
@@ -120,6 +127,8 @@ struct TicTacToeLocalView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            recordFinishedRound()
 
             try? await Task.sleep(
                 nanoseconds: 750_000_000
@@ -184,28 +193,34 @@ struct TicTacToeLocalView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.success)
 
-            showFeedback(
-                playerID == Self.playerOneID
-                ? "\(localPlayerDisplayName) won!"
-                : "Guest won!",
-                tone: .success
-            )
 
         case .draw:
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "The round ended in a draw",
-                tone: .neutral
-            )
         }
+    }
+
+    private func recordFinishedRound() {
+        let outcome: GameSessionRoundOutcome
+
+        if controller.state.isDraw {
+            outcome = .draw
+        } else if controller.state.winnerPlayerID == Self.playerOneID {
+            outcome = .firstPlayerWin
+        } else {
+            outcome = .secondPlayerWin
+        }
+
+        sessionScore.record(
+            outcome,
+            roundNumber: roundNumber
+        )
     }
 
     private func playAgain() {
         roundNumber += 1
         showResultOverlay = false
-        feedback = nil
 
         let startingPlayerID =
             roundNumber.isMultiple(of: 2)
@@ -217,27 +232,6 @@ struct TicTacToeLocalView: View {
         )
     }
 
-    private func showFeedback(
-        _ text: String,
-        tone: TicTacToeFeedbackTone
-    ) {
-        feedback = TicTacToeFeedbackMessage(
-            text: text,
-            tone: tone
-        )
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            if feedback?.text == text {
-                withAnimation(
-                    .easeOut(duration: 0.18)
-                ) {
-                    feedback = nil
-                }
-            }
-        }
-    }
 
     private var localPlayerDisplayName: String {
         playerName.isEmpty ? "You" : playerName

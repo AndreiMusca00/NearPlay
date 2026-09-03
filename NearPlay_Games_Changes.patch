@@ -1,0 +1,2342 @@
+diff --git a/NearPlay/Games/Battleship/Modes/BattleshipComputerView.swift b/NearPlay/Games/Battleship/Modes/BattleshipComputerView.swift
+index c9ea968..28112a4 100644
+--- a/NearPlay/Games/Battleship/Modes/BattleshipComputerView.swift
++++ b/NearPlay/Games/Battleship/Modes/BattleshipComputerView.swift
+@@ -12,13 +12,11 @@ struct BattleshipComputerView: View {
+     @State private var computerGame = BattleshipGame()
+ 
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+     @State private var pendingAttack = false
+     @State private var computerThinking = false
+     @State private var showQuitConfirmation = false
+     @State private var showResultOverlay = false
+-
+-    @State private var feedbackText: String?
+-    @State private var feedbackTone: BattleshipFeedbackTone = .neutral
+     @State private var computerTask: Task<Void, Never>?
+ 
+     private static let humanID =
+@@ -92,25 +90,21 @@ struct BattleshipComputerView: View {
+                 }
+             }
+ 
+-            if let feedbackText {
+-                feedbackBanner(
+-                    feedbackText,
+-                    tone: feedbackTone
+-                )
+-                .transition(
+-                    .move(edge: .top)
+-                    .combined(with: .opacity)
+-                )
+-                .zIndex(8)
+-            }
+-
+             if humanGame.phase == .finished &&
+                 showResultOverlay {
+-                BattleshipSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbol,
+                     accentColor: resultColor,
++                    buttonGradient: BattleshipTheme.primaryGradient,
++                    cardBackground: BattleshipTheme.cardBackground,
++                    usesGradientBorder: true,
++                    firstPlayerName: "You",
++                    secondPlayerName: "Computer",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: BattleshipTheme.cyan,
++                    secondPlayerColor: BattleshipTheme.purple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         computerTask?.cancel()
+@@ -351,10 +345,6 @@ struct BattleshipComputerView: View {
+             turnID: turnID
+         )
+ 
+-        showFeedback(
+-            "Battle started",
+-            tone: .success
+-        )
+ 
+         if startingPlayerID == Self.computerID {
+             scheduleComputerAttack()
+@@ -417,11 +407,6 @@ struct BattleshipComputerView: View {
+ 
+         pendingAttack = false
+ 
+-        showAttackFeedback(
+-            result.outcome,
+-            isHumanAttack: true
+-        )
+-
+         if result.outcome == .gameOver {
+             showResultAfterDelay()
+         } else {
+@@ -536,11 +521,6 @@ struct BattleshipComputerView: View {
+ 
+         computerThinking = false
+ 
+-        showAttackFeedback(
+-            result.outcome,
+-            isHumanAttack: false
+-        )
+-
+         if result.outcome == .gameOver {
+             showResultAfterDelay()
+         }
+@@ -549,6 +529,15 @@ struct BattleshipComputerView: View {
+     // MARK: - Result
+ 
+     private func showResultAfterDelay() {
++        if let winnerID {
++            sessionScore.record(
++                winnerID == Self.humanID
++                ? .firstPlayerWin
++                : .secondPlayerWin,
++                roundNumber: roundNumber
++            )
++        }
++
+         DispatchQueue.main.asyncAfter(
+             deadline: .now() + 0.85
+         ) {
+@@ -577,7 +566,6 @@ struct BattleshipComputerView: View {
+         pendingAttack = false
+         computerThinking = false
+         showResultOverlay = false
+-        feedbackText = nil
+     }
+ 
+     private var resultTitle: String {
+@@ -609,106 +597,6 @@ struct BattleshipComputerView: View {
+         computerGame.winnerPlayerID
+     }
+ 
+-    // MARK: - Feedback
+-
+-    private func showAttackFeedback(
+-        _ outcome: BattleshipAttackOutcome,
+-        isHumanAttack: Bool
+-    ) {
+-        let prefix =
+-            isHumanAttack ? "" : "Computer: "
+-
+-        switch outcome {
+-        case .miss:
+-            showFeedback(
+-                "\(prefix)Miss",
+-                tone: .neutral
+-            )
+-
+-        case .hit:
+-            showFeedback(
+-                "\(prefix)Hit!",
+-                tone: .warning
+-            )
+-
+-        case .sunk:
+-            showFeedback(
+-                "\(prefix)Ship sunk!",
+-                tone: .danger
+-            )
+-
+-        case .gameOver:
+-            showFeedback(
+-                isHumanAttack
+-                ? "Enemy fleet destroyed!"
+-                : "Your fleet was destroyed",
+-                tone:
+-                    isHumanAttack
+-                    ? .success
+-                    : .danger
+-            )
+-        }
+-    }
+-
+-    private func showFeedback(
+-        _ text: String,
+-        tone: BattleshipFeedbackTone
+-    ) {
+-        feedbackText = text
+-        feedbackTone = tone
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            withAnimation(.easeOut(duration: 0.18)) {
+-                if feedbackText == text {
+-                    feedbackText = nil
+-                }
+-            }
+-        }
+-    }
+-
+-    private func feedbackBanner(
+-        _ text: String,
+-        tone: BattleshipFeedbackTone
+-    ) -> some View {
+-        HStack(spacing: 9) {
+-            Image(systemName: tone.iconName)
+-                .font(.system(size: 17, weight: .bold))
+-
+-            Text(text)
+-                .font(
+-                    .system(
+-                        size: 15,
+-                        weight: .bold,
+-                        design: .rounded
+-                    )
+-                )
+-        }
+-        .foregroundStyle(.white)
+-        .padding(.horizontal, 18)
+-        .frame(height: 48)
+-        .background {
+-            Capsule()
+-                .fill(tone.color.opacity(0.88))
+-        }
+-        .overlay {
+-            Capsule()
+-                .stroke(
+-                    Color.white.opacity(0.26),
+-                    lineWidth: 1
+-                )
+-        }
+-        .shadow(
+-            color: tone.color.opacity(0.42),
+-            radius: 12
+-        )
+-        .frame(
+-            maxHeight: .infinity,
+-            alignment: .top
+-        )
+-        .padding(.top, 74)
+-    }
+ 
+     // MARK: - Helpers
+ 
+diff --git a/NearPlay/Games/Battleship/Modes/BattleshipLocalView.swift b/NearPlay/Games/Battleship/Modes/BattleshipLocalView.swift
+index 288b66d..b4cea93 100644
+--- a/NearPlay/Games/Battleship/Modes/BattleshipLocalView.swift
++++ b/NearPlay/Games/Battleship/Modes/BattleshipLocalView.swift
+@@ -23,6 +23,7 @@ struct BattleshipLocalView: View {
+     @State private var localPhase: BattleshipLocalPhase = .placingPlayerOne
+     @State private var activePlayerID = Self.playerOneID
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+ 
+     @State private var pendingAttack = false
+     @State private var showQuitConfirmation = false
+@@ -97,11 +98,19 @@ struct BattleshipLocalView: View {
+ 
+             if localPhase == .finished &&
+                 showResultOverlay {
+-                BattleshipSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbol,
+                     accentColor: resultColor,
++                    buttonGradient: BattleshipTheme.primaryGradient,
++                    cardBackground: BattleshipTheme.cardBackground,
++                    usesGradientBorder: true,
++                    firstPlayerName: playerOneName,
++                    secondPlayerName: "Guest",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: BattleshipTheme.cyan,
++                    secondPlayerColor: BattleshipTheme.purple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         dismiss()
+@@ -388,10 +397,6 @@ struct BattleshipLocalView: View {
+             localPhase = .battle
+         }
+ 
+-        showFeedback(
+-            "Battle started",
+-            tone: .success
+-        )
+     }
+ 
+     // MARK: - Battle
+@@ -466,11 +471,6 @@ struct BattleshipLocalView: View {
+             to: defenderID
+         )
+ 
+-        showAttackFeedback(
+-            result.outcome,
+-            attackerName: playerName(for: attackerID)
+-        )
+-
+         pendingAttack = false
+ 
+         if result.outcome == .gameOver {
+@@ -490,6 +490,13 @@ struct BattleshipLocalView: View {
+     private func finishBattle(
+         winnerID: String
+     ) {
++        sessionScore.record(
++            winnerID == Self.playerOneID
++            ? .firstPlayerWin
++            : .secondPlayerWin,
++            roundNumber: roundNumber
++        )
++
+         activePlayerID = winnerID
+ 
+         withAnimation(.easeOut(duration: 0.20)) {
+@@ -524,34 +531,6 @@ struct BattleshipLocalView: View {
+ 
+     // MARK: - Feedback
+ 
+-    private func showAttackFeedback(
+-        _ outcome: BattleshipAttackOutcome,
+-        attackerName: String
+-    ) {
+-        switch outcome {
+-        case .miss:
+-            showFeedback(
+-                "\(attackerName): Miss",
+-                tone: .neutral
+-            )
+-        case .hit:
+-            showFeedback(
+-                "\(attackerName): Hit!",
+-                tone: .warning
+-            )
+-        case .sunk:
+-            showFeedback(
+-                "\(attackerName): Ship sunk!",
+-                tone: .danger
+-            )
+-        case .gameOver:
+-            showFeedback(
+-                "\(attackerName) destroyed the fleet!",
+-                tone: .success
+-            )
+-        }
+-    }
+-
+     private func showFeedback(
+         _ text: String,
+         tone: BattleshipFeedbackTone
+diff --git a/NearPlay/Games/Battleship/Modes/BattleshipView.swift b/NearPlay/Games/Battleship/Modes/BattleshipView.swift
+index 2ec9f99..5f77ff5 100644
+--- a/NearPlay/Games/Battleship/Modes/BattleshipView.swift
++++ b/NearPlay/Games/Battleship/Modes/BattleshipView.swift
+@@ -30,10 +30,6 @@ struct BattleshipView: View {
+     @State private var isQuitting = false
+     @State private var showResultOverlay = false
+ 
+-    @State private var feedbackText: String?
+-    @State private var feedbackTone:
+-        BattleshipFeedbackTone = .neutral
+-
+     init(
+         game: Game,
+         nearbyService: NearbyService,
+@@ -137,18 +133,6 @@ struct BattleshipView: View {
+                 }
+             }
+ 
+-            if let feedbackText {
+-                feedbackBanner(
+-                    feedbackText,
+-                    tone: feedbackTone
+-                )
+-                .transition(
+-                    .move(edge: .top)
+-                    .combined(with: .opacity)
+-                )
+-                .zIndex(8)
+-            }
+-
+             if battleship.phase == .finished &&
+                 showResultOverlay {
+                 GameResultOverlay(
+@@ -210,7 +194,6 @@ struct BattleshipView: View {
+ 
+             battleship.resetForRematch()
+             pendingAttack = false
+-            feedbackText = nil
+ 
+             // Alternarea jucătorului care începe este calculată
+             // când ambii dau Ready pentru noua rundă.
+@@ -505,10 +488,6 @@ struct BattleshipView: View {
+             type: .gameState
+         )
+ 
+-        showFeedback(
+-            "Battle started",
+-            tone: .success
+-        )
+     }
+ 
+     // MARK: - Attack
+@@ -626,11 +605,6 @@ struct BattleshipView: View {
+             response,
+             type: .gameState
+         )
+-
+-        showAttackFeedback(
+-            result.outcome,
+-            isLocalAttack: false
+-        )
+     }
+ 
+     private func applyAttackResult(
+@@ -660,11 +634,6 @@ struct BattleshipView: View {
+         )
+ 
+         pendingAttack = false
+-
+-        showAttackFeedback(
+-            payload.outcome,
+-            isLocalAttack: true
+-        )
+     }
+ 
+     // MARK: - Incoming messages
+@@ -724,11 +693,6 @@ struct BattleshipView: View {
+                         started.startingPlayerID,
+                     turnID: started.turnID
+                 )
+-
+-                showFeedback(
+-                    "Battle started",
+-                    tone: .success
+-                )
+                 return
+             }
+ 
+@@ -776,149 +740,6 @@ struct BattleshipView: View {
+         }
+     }
+ 
+-    // MARK: - Feedback
+-
+-    private func showAttackFeedback(
+-        _ outcome: BattleshipAttackOutcome,
+-        isLocalAttack: Bool
+-    ) {
+-        let prefix =
+-            isLocalAttack ? "" : "Enemy: "
+-
+-        switch outcome {
+-        case .miss:
+-            showFeedback(
+-                "\(prefix)Miss",
+-                tone: .neutral
+-            )
+-
+-        case .hit:
+-            showFeedback(
+-                "\(prefix)Hit!",
+-                tone: .warning
+-            )
+-
+-        case .sunk:
+-            showFeedback(
+-                "\(prefix)Ship sunk!",
+-                tone: .danger
+-            )
+-
+-        case .gameOver:
+-            showFeedback(
+-                isLocalAttack
+-                ? "Enemy fleet destroyed!"
+-                : "Your fleet was destroyed",
+-                tone:
+-                    isLocalAttack
+-                    ? .success
+-                    : .danger
+-            )
+-        }
+-    }
+-
+-    private func showFeedback(
+-        _ text: String,
+-        tone: BattleshipFeedbackTone
+-    ) {
+-        feedbackText = text
+-        feedbackTone = tone
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            withAnimation(.easeOut(duration: 0.18)) {
+-                if feedbackText == text {
+-                    feedbackText = nil
+-                }
+-            }
+-        }
+-    }
+-
+-    private func feedbackBanner(
+-        _ text: String,
+-        tone: BattleshipFeedbackTone
+-    ) -> some View {
+-        HStack(spacing: 9) {
+-            Image(systemName: tone.iconName)
+-                .font(.system(size: 17, weight: .bold))
+-
+-            Text(text)
+-                .font(
+-                    .system(
+-                        size: 15,
+-                        weight: .bold,
+-                        design: .rounded
+-                    )
+-                )
+-        }
+-        .foregroundStyle(.white)
+-        .padding(.horizontal, 18)
+-        .frame(height: 48)
+-        .background {
+-            Capsule()
+-                .fill(tone.color.opacity(0.88))
+-        }
+-        .overlay {
+-            Capsule()
+-                .stroke(
+-                    Color.white.opacity(0.26),
+-                    lineWidth: 1
+-                )
+-        }
+-        .shadow(
+-            color: tone.color.opacity(0.42),
+-            radius: 12
+-        )
+-        .frame(
+-            maxHeight: .infinity,
+-            alignment: .top
+-        )
+-        .padding(.top, 74)
+-    }
+-
+-    // MARK: - Quit
+-
+-    private func quitGame() {
+-        guard !isQuitting else {
+-            return
+-        }
+-
+-        isQuitting = true
+-
+-        let payload = GameQuitPayload(
+-            playerName: localPlayerName,
+-            reason: "quit"
+-        )
+-
+-        let data = try? JSONEncoder()
+-            .encode(payload)
+-
+-        nearbyService.send(
+-            NearbyMessage(
+-                gameID: game.id,
+-                senderName: localPlayerName,
+-                type: .gameQuit,
+-                payload: data
+-            )
+-        )
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 0.35
+-        ) {
+-            nearbyService.stop()
+-            dismiss()
+-            onExitToHome()
+-            isQuitting = false
+-        }
+-    }
+-
+-    private func handleOpponentQuit() {
+-        nearbyService.stop()
+-        dismiss()
+-        onExitToHome()
+-    }
+-
+     private var quittingOverlay: some View {
+         ZStack {
+             Color.black.opacity(0.72)
+diff --git a/NearPlay/Games/Common/GameSessionScore.swift b/NearPlay/Games/Common/GameSessionScore.swift
+new file mode 100644
+index 0000000..9f609b3
+--- /dev/null
++++ b/NearPlay/Games/Common/GameSessionScore.swift
+@@ -0,0 +1,39 @@
++import Foundation
++
++enum GameSessionRoundOutcome {
++    case firstPlayerWin
++    case secondPlayerWin
++    case draw
++}
++
++struct GameSessionScore {
++    private(set) var firstPlayerWins = 0
++    private(set) var secondPlayerWins = 0
++    private(set) var draws = 0
++
++    private var recordedRounds: Set<Int> = []
++
++    mutating func record(
++        _ outcome: GameSessionRoundOutcome,
++        roundNumber: Int
++    ) {
++        guard recordedRounds.insert(roundNumber).inserted else {
++            return
++        }
++
++        switch outcome {
++        case .firstPlayerWin:
++            firstPlayerWins += 1
++
++        case .secondPlayerWin:
++            secondPlayerWins += 1
++
++        case .draw:
++            draws += 1
++        }
++    }
++
++    var totalRounds: Int {
++        firstPlayerWins + secondPlayerWins + draws
++    }
++}
+diff --git a/NearPlay/Games/Common/SessionScoreView.swift b/NearPlay/Games/Common/SessionScoreView.swift
+new file mode 100644
+index 0000000..2b4c7db
+--- /dev/null
++++ b/NearPlay/Games/Common/SessionScoreView.swift
+@@ -0,0 +1,128 @@
++import SwiftUI
++
++struct SessionScoreView: View {
++    let firstPlayerName: String
++    let secondPlayerName: String
++
++    let firstPlayerScore: Int
++    let secondPlayerScore: Int
++    let draws: Int
++
++    let firstPlayerColor: Color
++    let secondPlayerColor: Color
++
++    var body: some View {
++        VStack(spacing: 10) {
++            Text("SESSION")
++                .font(
++                    .system(
++                        size: 11,
++                        weight: .black,
++                        design: .rounded
++                    )
++                )
++                .tracking(1.2)
++                .foregroundStyle(
++                    Color.white.opacity(0.36)
++                )
++
++            HStack(spacing: 14) {
++                playerColumn(
++                    name: firstPlayerName,
++                    score: firstPlayerScore,
++                    color: firstPlayerColor
++                )
++
++                Text("–")
++                    .font(
++                        .system(
++                            size: 22,
++                            weight: .semibold,
++                            design: .rounded
++                        )
++                    )
++                    .foregroundStyle(
++                        Color.white.opacity(0.30)
++                    )
++
++                playerColumn(
++                    name: secondPlayerName,
++                    score: secondPlayerScore,
++                    color: secondPlayerColor
++                )
++            }
++
++            if draws > 0 {
++                Text(
++                    draws == 1
++                    ? "1 draw"
++                    : "\(draws) draws"
++                )
++                .font(
++                    .system(
++                        size: 12,
++                        weight: .semibold,
++                        design: .rounded
++                    )
++                )
++                .foregroundStyle(
++                    Color.white.opacity(0.42)
++                )
++            }
++        }
++        .padding(.horizontal, 16)
++        .padding(.vertical, 13)
++        .frame(maxWidth: .infinity)
++        .background {
++            RoundedRectangle(
++                cornerRadius: 18,
++                style: .continuous
++            )
++            .fill(Color.white.opacity(0.045))
++        }
++        .overlay {
++            RoundedRectangle(
++                cornerRadius: 18,
++                style: .continuous
++            )
++            .stroke(
++                Color.white.opacity(0.09),
++                lineWidth: 1
++            )
++        }
++    }
++
++    private func playerColumn(
++        name: String,
++        score: Int,
++        color: Color
++    ) -> some View {
++        VStack(spacing: 4) {
++            Text("\(score)")
++                .font(
++                    .system(
++                        size: 30,
++                        weight: .black,
++                        design: .rounded
++                    )
++                )
++                .foregroundStyle(color)
++                .contentTransition(.numericText())
++
++            Text(name)
++                .font(
++                    .system(
++                        size: 12,
++                        weight: .semibold,
++                        design: .rounded
++                    )
++                )
++                .foregroundStyle(
++                    Color.white.opacity(0.60)
++                )
++                .lineLimit(1)
++                .minimumScaleFactor(0.75)
++        }
++        .frame(maxWidth: .infinity)
++    }
++}
+diff --git a/NearPlay/Games/Common/SimpleGameResultOverlay.swift b/NearPlay/Games/Common/SimpleGameResultOverlay.swift
+new file mode 100644
+index 0000000..c28556a
+--- /dev/null
++++ b/NearPlay/Games/Common/SimpleGameResultOverlay.swift
+@@ -0,0 +1,171 @@
++import SwiftUI
++
++struct SimpleGameResultOverlay: View {
++    let title: String
++    let subtitle: String
++    let symbolName: String
++    let accentColor: Color
++
++    let buttonGradient: LinearGradient
++    let cardBackground: LinearGradient
++    var usesGradientBorder = false
++
++    let firstPlayerName: String
++    let secondPlayerName: String
++    let sessionScore: GameSessionScore
++    let firstPlayerColor: Color
++    let secondPlayerColor: Color
++
++    let onPlayAgain: () -> Void
++    let onQuit: () -> Void
++
++    var body: some View {
++        ZStack {
++            Color.black.opacity(0.72)
++                .ignoresSafeArea()
++
++            VStack(spacing: 19) {
++                ZStack {
++                    Circle()
++                        .fill(accentColor.opacity(0.14))
++                        .frame(width: 76, height: 76)
++
++                    Circle()
++                        .stroke(
++                            accentColor.opacity(0.58),
++                            lineWidth: 1.4
++                        )
++                        .frame(width: 76, height: 76)
++
++                    Image(systemName: symbolName)
++                        .font(
++                            .system(
++                                size: 31,
++                                weight: .bold
++                            )
++                        )
++                        .foregroundStyle(accentColor)
++                        .shadow(
++                            color: accentColor.opacity(0.60),
++                            radius: 10
++                        )
++                }
++
++                VStack(spacing: 7) {
++                    Text(title)
++                        .font(
++                            .system(
++                                size: 27,
++                                weight: .bold,
++                                design: .rounded
++                            )
++                        )
++                        .foregroundStyle(.white)
++                        .multilineTextAlignment(.center)
++
++                    Text(subtitle)
++                        .font(
++                            .system(
++                                size: 14,
++                                weight: .medium
++                            )
++                        )
++                        .foregroundStyle(
++                            Color.white.opacity(0.56)
++                        )
++                        .multilineTextAlignment(.center)
++                        .fixedSize(
++                            horizontal: false,
++                            vertical: true
++                        )
++                }
++
++                SessionScoreView(
++                    firstPlayerName: firstPlayerName,
++                    secondPlayerName: secondPlayerName,
++                    firstPlayerScore:
++                        sessionScore.firstPlayerWins,
++                    secondPlayerScore:
++                        sessionScore.secondPlayerWins,
++                    draws: sessionScore.draws,
++                    firstPlayerColor: firstPlayerColor,
++                    secondPlayerColor: secondPlayerColor
++                )
++
++                VStack(spacing: 10) {
++                    Button(action: onPlayAgain) {
++                        HStack(spacing: 9) {
++                            Image(systemName: "arrow.clockwise")
++                            Text("Play Again")
++                        }
++                        .font(
++                            .system(
++                                size: 16,
++                                weight: .bold,
++                                design: .rounded
++                            )
++                        )
++                        .foregroundStyle(.white)
++                        .frame(maxWidth: .infinity)
++                        .frame(height: 52)
++                        .background {
++                            RoundedRectangle(
++                                cornerRadius: 17,
++                                style: .continuous
++                            )
++                            .fill(buttonGradient)
++                        }
++                    }
++                    .buttonStyle(.plain)
++
++                    Button(action: onQuit) {
++                        Text("Quit")
++                            .font(
++                                .system(
++                                    size: 15,
++                                    weight: .semibold,
++                                    design: .rounded
++                                )
++                            )
++                            .foregroundStyle(
++                                Color.white.opacity(0.64)
++                            )
++                            .frame(maxWidth: .infinity)
++                            .frame(height: 45)
++                            .background {
++                                RoundedRectangle(
++                                    cornerRadius: 15,
++                                    style: .continuous
++                                )
++                                .fill(Color.white.opacity(0.045))
++                            }
++                    }
++                    .buttonStyle(.plain)
++                }
++            }
++            .padding(.horizontal, 24)
++            .padding(.vertical, 27)
++            .frame(maxWidth: 350)
++            .background {
++                RoundedRectangle(
++                    cornerRadius: 28,
++                    style: .continuous
++                )
++                .fill(cardBackground)
++            }
++            .overlay {
++                RoundedRectangle(
++                    cornerRadius: 28,
++                    style: .continuous
++                )
++                .stroke(
++                    usesGradientBorder
++                    ? AnyShapeStyle(buttonGradient)
++                    : AnyShapeStyle(Color.white.opacity(0.12)),
++                    lineWidth: usesGradientBorder ? 1.25 : 1
++                )
++            }
++            .padding(.horizontal, 24)
++        }
++    }
++}
+diff --git a/NearPlay/Games/ConnectFour/Modes/ConnectFourComputerView.swift b/NearPlay/Games/ConnectFour/Modes/ConnectFourComputerView.swift
+index 9a5a111..87992b6 100644
+--- a/NearPlay/Games/ConnectFour/Modes/ConnectFourComputerView.swift
++++ b/NearPlay/Games/ConnectFour/Modes/ConnectFourComputerView.swift
+@@ -18,11 +18,10 @@ struct ConnectFourComputerView: View {
+         ConnectFourMatchController
+ 
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+     @State private var computerThinking = false
+     @State private var showResultOverlay = false
+     @State private var showQuitConfirmation = false
+-    @State private var feedback:
+-        ConnectFourFeedbackMessage?
+     @State private var computerTask:
+         Task<Void, Never>?
+ 
+@@ -88,7 +87,6 @@ struct ConnectFourComputerView: View {
+                     canHumanPlay,
+                 showsProgress:
+                     computerThinking,
+-                feedback: feedback,
+                 onColumnSelected:
+                     selectHumanColumn,
+                 onQuitRequested: {
+@@ -98,11 +96,19 @@ struct ConnectFourComputerView: View {
+ 
+             if controller.state.isFinished &&
+                 showResultOverlay {
+-                ConnectFourSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbol,
+                     accentColor: resultColor,
++                    buttonGradient: ConnectFourTheme.primaryGradient,
++                    cardBackground: ConnectFourTheme.cardBackground,
++                    usesGradientBorder: false,
++                    firstPlayerName: "You",
++                    secondPlayerName: "Computer",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: ConnectFourTheme.cyan,
++                    secondPlayerColor: ConnectFourTheme.purple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         computerTask?.cancel()
+@@ -143,6 +149,8 @@ struct ConnectFourComputerView: View {
+                 return
+             }
+ 
++            recordFinishedRound()
++
+             try? await Task.sleep(
+                 nanoseconds: 750_000_000
+             )
+@@ -276,19 +284,11 @@ struct ConnectFourComputerView: View {
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.success)
+ 
+-            showFeedback(
+-                "Connect Four!",
+-                tone: .success
+-            )
+ 
+         case .draw:
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "Board full — draw",
+-                tone: .neutral
+-            )
+         }
+     }
+ 
+@@ -309,28 +309,36 @@ struct ConnectFourComputerView: View {
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "Computer connected four",
+-                tone: .danger
+-            )
+ 
+         case .draw:
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "Board full — draw",
+-                tone: .neutral
+-            )
+         }
+     }
+ 
++    private func recordFinishedRound() {
++        let outcome: GameSessionRoundOutcome
++
++        if controller.state.isDraw {
++            outcome = .draw
++        } else if controller.state.winnerPlayerID == Self.humanID {
++            outcome = .firstPlayerWin
++        } else {
++            outcome = .secondPlayerWin
++        }
++
++        sessionScore.record(
++            outcome,
++            roundNumber: roundNumber
++        )
++    }
++
+     private func playAgain() {
+         computerTask?.cancel()
+         computerTask = nil
+         computerThinking = false
+         showResultOverlay = false
+-        feedback = nil
+ 
+         roundNumber += 1
+ 
+@@ -349,27 +357,6 @@ struct ConnectFourComputerView: View {
+         }
+     }
+ 
+-    private func showFeedback(
+-        _ text: String,
+-        tone: ConnectFourFeedbackTone
+-    ) {
+-        feedback = ConnectFourFeedbackMessage(
+-            text: text,
+-            tone: tone
+-        )
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            if feedback?.text == text {
+-                withAnimation(
+-                    .easeOut(duration: 0.18)
+-                ) {
+-                    feedback = nil
+-                }
+-            }
+-        }
+-    }
+ 
+     private var canHumanPlay: Bool {
+         !computerThinking &&
+diff --git a/NearPlay/Games/ConnectFour/Modes/ConnectFourLocalView.swift b/NearPlay/Games/ConnectFour/Modes/ConnectFourLocalView.swift
+index e5e5e8a..418fca6 100644
+--- a/NearPlay/Games/ConnectFour/Modes/ConnectFourLocalView.swift
++++ b/NearPlay/Games/ConnectFour/Modes/ConnectFourLocalView.swift
+@@ -20,10 +20,9 @@ struct ConnectFourLocalView: View {
+         ConnectFourMatchController
+ 
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+     @State private var showResultOverlay = false
+     @State private var showQuitConfirmation = false
+-    @State private var feedback:
+-        ConnectFourFeedbackMessage?
+ 
+     private static let playerOneID =
+         "connect_four_local_player_one"
+@@ -81,7 +80,6 @@ struct ConnectFourLocalView: View {
+                 isInteractionEnabled:
+                     !controller.state.isFinished,
+                 showsProgress: false,
+-                feedback: feedback,
+                 onColumnSelected:
+                     selectColumn,
+                 onQuitRequested: {
+@@ -91,11 +89,19 @@ struct ConnectFourLocalView: View {
+ 
+             if controller.state.isFinished &&
+                 showResultOverlay {
+-                ConnectFourSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbol,
+                     accentColor: resultColor,
++                    buttonGradient: ConnectFourTheme.primaryGradient,
++                    cardBackground: ConnectFourTheme.cardBackground,
++                    usesGradientBorder: false,
++                    firstPlayerName: localPlayerDisplayName,
++                    secondPlayerName: "Guest",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: ConnectFourTheme.cyan,
++                    secondPlayerColor: ConnectFourTheme.purple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         dismiss()
+@@ -130,6 +136,8 @@ struct ConnectFourLocalView: View {
+                 return
+             }
+ 
++            recordFinishedRound()
++
+             try? await Task.sleep(
+                 nanoseconds: 750_000_000
+             )
+@@ -195,30 +203,36 @@ struct ConnectFourLocalView: View {
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.success)
+ 
+-            showFeedback(
+-                playerID == Self.playerOneID
+-                ? "\(localPlayerDisplayName) connected four!"
+-                : "Guest connected four!",
+-                tone: .success
+-            )
+ 
+         case .draw:
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "Board full — draw",
+-                tone: .neutral
+-            )
+         }
+     }
+ 
+     // MARK: - Rematch
+ 
++    private func recordFinishedRound() {
++        let outcome: GameSessionRoundOutcome
++
++        if controller.state.isDraw {
++            outcome = .draw
++        } else if controller.state.winnerPlayerID == Self.playerOneID {
++            outcome = .firstPlayerWin
++        } else {
++            outcome = .secondPlayerWin
++        }
++
++        sessionScore.record(
++            outcome,
++            roundNumber: roundNumber
++        )
++    }
++
+     private func playAgain() {
+         roundNumber += 1
+         showResultOverlay = false
+-        feedback = nil
+ 
+         let startingPlayerID =
+             roundNumber.isMultiple(of: 2)
+@@ -230,30 +244,6 @@ struct ConnectFourLocalView: View {
+         )
+     }
+ 
+-    // MARK: - Feedback
+-
+-    private func showFeedback(
+-        _ text: String,
+-        tone: ConnectFourFeedbackTone
+-    ) {
+-        feedback = ConnectFourFeedbackMessage(
+-            text: text,
+-            tone: tone
+-        )
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            if feedback?.text == text {
+-                withAnimation(
+-                    .easeOut(duration: 0.18)
+-                ) {
+-                    feedback = nil
+-                }
+-            }
+-        }
+-    }
+-
+     // MARK: - Presentation
+ 
+     private var localPlayerDisplayName: String {
+diff --git a/NearPlay/Games/ConnectFour/Modes/ConnectFourView.swift b/NearPlay/Games/ConnectFour/Modes/ConnectFourView.swift
+index 060a4a3..34d8612 100644
+--- a/NearPlay/Games/ConnectFour/Modes/ConnectFourView.swift
++++ b/NearPlay/Games/ConnectFour/Modes/ConnectFourView.swift
+@@ -37,9 +37,6 @@ struct ConnectFourView: View {
+     @State private var isQuitting = false
+     @State private var showResultOverlay = false
+ 
+-    @State private var feedback:
+-        ConnectFourFeedbackMessage?
+-
+     init(
+         game: Game,
+         nearbyService: NearbyService,
+@@ -116,7 +113,6 @@ struct ConnectFourView: View {
+                 showsProgress:
+                     pendingMove ||
+                     awaitingRoundReset,
+-                feedback: feedback,
+                 onColumnSelected:
+                     selectColumn,
+                 onQuitRequested: {
+@@ -178,7 +174,6 @@ struct ConnectFourView: View {
+ 
+             showResultOverlay = false
+             pendingMove = false
+-            feedback = nil
+ 
+             let startingPlayerID =
+                 confirmedRound.isMultiple(of: 2)
+@@ -314,24 +309,11 @@ struct ConnectFourView: View {
+                     : .warning
+                 )
+ 
+-            showFeedback(
+-                isLocalMove
+-                ? "Connect Four!"
+-                : "Opponent connected four",
+-                tone:
+-                    isLocalMove
+-                    ? .success
+-                    : .danger
+-            )
+ 
+         case .draw:
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "Board full — draw",
+-                tone: .neutral
+-            )
+         }
+ 
+         broadcastAuthoritativeState()
+@@ -408,15 +390,6 @@ struct ConnectFourView: View {
+         if previousWinner == nil,
+            let winner =
+             newState.winnerPlayerID {
+-            showFeedback(
+-                winner == localPlayerID
+-                ? "Connect Four!"
+-                : "Opponent connected four",
+-                tone:
+-                    winner == localPlayerID
+-                    ? .success
+-                    : .danger
+-            )
+         }
+     }
+ 
+@@ -508,30 +481,6 @@ struct ConnectFourView: View {
+         }
+     }
+ 
+-    // MARK: - Feedback
+-
+-    private func showFeedback(
+-        _ text: String,
+-        tone: ConnectFourFeedbackTone
+-    ) {
+-        feedback = ConnectFourFeedbackMessage(
+-            text: text,
+-            tone: tone
+-        )
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            if feedback?.text == text {
+-                withAnimation(
+-                    .easeOut(duration: 0.18)
+-                ) {
+-                    feedback = nil
+-                }
+-            }
+-        }
+-    }
+-
+     // MARK: - Quit
+ 
+     private func quitGame() {
+diff --git a/NearPlay/Games/ConnectFour/UI/ConnectFourGameScreen.swift b/NearPlay/Games/ConnectFour/UI/ConnectFourGameScreen.swift
+index 1870448..f964fd4 100644
+--- a/NearPlay/Games/ConnectFour/UI/ConnectFourGameScreen.swift
++++ b/NearPlay/Games/ConnectFour/UI/ConnectFourGameScreen.swift
+@@ -12,38 +12,7 @@ struct ConnectFourPlayerPresentation: Identifiable, Equatable {
+     let inactiveBadge: String
+ }
+ 
+-enum ConnectFourFeedbackTone {
+-    case neutral
+-    case success
+-    case danger
+-
+-    var color: Color {
+-        switch self {
+-        case .neutral:
+-            return ConnectFourTheme.blue
+-        case .success:
+-            return .green
+-        case .danger:
+-            return .red
+-        }
+-    }
+ 
+-    var iconName: String {
+-        switch self {
+-        case .neutral:
+-            return "circle.dotted"
+-        case .success:
+-            return "checkmark.circle.fill"
+-        case .danger:
+-            return "xmark.octagon.fill"
+-        }
+-    }
+-}
+-
+-struct ConnectFourFeedbackMessage: Equatable {
+-    let text: String
+-    let tone: ConnectFourFeedbackTone
+-}
+ 
+ struct ConnectFourGameScreen: View {
+     let gameTitle: String
+@@ -61,7 +30,6 @@ struct ConnectFourGameScreen: View {
+ 
+     let isInteractionEnabled: Bool
+     let showsProgress: Bool
+-    let feedback: ConnectFourFeedbackMessage?
+ 
+     let onColumnSelected: (Int) -> Void
+     let onQuitRequested: () -> Void
+@@ -122,14 +90,6 @@ struct ConnectFourGameScreen: View {
+                 }
+             }
+ 
+-            if let feedback {
+-                feedbackBanner(feedback)
+-                    .transition(
+-                        .move(edge: .top)
+-                        .combined(with: .opacity)
+-                    )
+-                    .zIndex(8)
+-            }
+         }
+         .toolbar(.hidden, for: .navigationBar)
+         .navigationBarBackButtonHidden(true)
+@@ -443,57 +403,6 @@ struct ConnectFourGameScreen: View {
+         }
+     }
+ 
+-    // MARK: - Feedback
+-
+-    private func feedbackBanner(
+-        _ message: ConnectFourFeedbackMessage
+-    ) -> some View {
+-        HStack(spacing: 9) {
+-            Image(systemName: message.tone.iconName)
+-                .font(
+-                    .system(
+-                        size: 17,
+-                        weight: .bold
+-                    )
+-                )
+-
+-            Text(message.text)
+-                .font(
+-                    .system(
+-                        size: 15,
+-                        weight: .bold,
+-                        design: .rounded
+-                    )
+-                )
+-        }
+-        .foregroundStyle(.white)
+-        .padding(.horizontal, 18)
+-        .frame(height: 48)
+-        .background {
+-            Capsule()
+-                .fill(
+-                    message.tone.color.opacity(0.88)
+-                )
+-        }
+-        .overlay {
+-            Capsule()
+-                .stroke(
+-                    Color.white.opacity(0.26),
+-                    lineWidth: 1
+-                )
+-        }
+-        .shadow(
+-            color:
+-                message.tone.color.opacity(0.42),
+-            radius: 12
+-        )
+-        .frame(
+-            maxHeight: .infinity,
+-            alignment: .top
+-        )
+-        .padding(.top, 72)
+-    }
+-
+     private var activeDisc: ConnectFourDisc {
+         if controller.state.activePlayerID ==
+             firstPlayer.id {
+diff --git a/NearPlay/Games/NumberRush/Modes/NumberRushComputerView.swift b/NearPlay/Games/NumberRush/Modes/NumberRushComputerView.swift
+index f0a312f..ffbe63d 100644
+--- a/NearPlay/Games/NumberRush/Modes/NumberRushComputerView.swift
++++ b/NearPlay/Games/NumberRush/Modes/NumberRushComputerView.swift
+@@ -12,6 +12,7 @@ struct NumberRushComputerView: View {
+     private var controller: NumberRushMatchController
+ 
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+     @State private var wrongNumber: Int?
+     @State private var correctNumber: Int?
+     @State private var feedback: NumberRushFeedbackMessage?
+@@ -93,11 +94,19 @@ struct NumberRushComputerView: View {
+ 
+             if controller.state.isFinished &&
+                 showResultOverlay {
+-                NumberRushSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbolName,
+                     accentColor: resultAccentColor,
++                    buttonGradient: NumberRushTheme.primaryGradient,
++                    cardBackground: NumberRushTheme.cardBackground,
++                    usesGradientBorder: false,
++                    firstPlayerName: "You",
++                    secondPlayerName: "Computer",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: NumberRushTheme.blue,
++                    secondPlayerColor: NumberRushTheme.purple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         cancelScheduledWork()
+@@ -140,6 +149,8 @@ struct NumberRushComputerView: View {
+                 return
+             }
+ 
++            recordFinishedRound()
++
+             cancelScheduledWork()
+ 
+             try? await Task.sleep(
+@@ -332,6 +343,24 @@ struct NumberRushComputerView: View {
+         )
+     }
+ 
++    private func recordFinishedRound() {
++        let outcome: GameSessionRoundOutcome
++
++        switch localRoundResult {
++        case .win:
++            outcome = .firstPlayerWin
++        case .loss:
++            outcome = .secondPlayerWin
++        case .draw:
++            outcome = .draw
++        }
++
++        sessionScore.record(
++            outcome,
++            roundNumber: roundNumber
++        )
++    }
++
+     private func playAgain() {
+         cancelScheduledWork()
+ 
+diff --git a/NearPlay/Games/NumberRush/Modes/NumberRushLocalView.swift b/NearPlay/Games/NumberRush/Modes/NumberRushLocalView.swift
+index 00820b4..1cddab5 100644
+--- a/NearPlay/Games/NumberRush/Modes/NumberRushLocalView.swift
++++ b/NearPlay/Games/NumberRush/Modes/NumberRushLocalView.swift
+@@ -14,6 +14,7 @@ struct NumberRushLocalView: View {
+     private var controller: NumberRushMatchController
+ 
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+     @State private var wrongNumber: Int?
+     @State private var correctNumber: Int?
+     @State private var feedback: NumberRushFeedbackMessage?
+@@ -86,11 +87,19 @@ struct NumberRushLocalView: View {
+ 
+             if controller.state.isFinished &&
+                 showResultOverlay {
+-                NumberRushSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbolName,
+                     accentColor: resultAccentColor,
++                    buttonGradient: NumberRushTheme.primaryGradient,
++                    cardBackground: NumberRushTheme.cardBackground,
++                    usesGradientBorder: false,
++                    firstPlayerName: localPlayerDisplayName,
++                    secondPlayerName: "Guest",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: NumberRushTheme.blue,
++                    secondPlayerColor: NumberRushTheme.purple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         timeoutWorkItem?.cancel()
+@@ -134,6 +143,8 @@ struct NumberRushLocalView: View {
+                 return
+             }
+ 
++            recordFinishedRound()
++
+             timeoutWorkItem?.cancel()
+ 
+             try? await Task.sleep(
+@@ -236,6 +247,24 @@ struct NumberRushLocalView: View {
+         )
+     }
+ 
++    private func recordFinishedRound() {
++        let outcome: GameSessionRoundOutcome
++
++        switch localRoundResult {
++        case .win:
++            outcome = .firstPlayerWin
++        case .loss:
++            outcome = .secondPlayerWin
++        case .draw:
++            outcome = .draw
++        }
++
++        sessionScore.record(
++            outcome,
++            roundNumber: roundNumber
++        )
++    }
++
+     private func playAgain() {
+         timeoutWorkItem?.cancel()
+ 
+diff --git a/NearPlay/Games/RockPaperScissors/Modes/RPSComputerView.swift b/NearPlay/Games/RockPaperScissors/Modes/RPSComputerView.swift
+index d646959..b3f6454 100644
+--- a/NearPlay/Games/RockPaperScissors/Modes/RPSComputerView.swift
++++ b/NearPlay/Games/RockPaperScissors/Modes/RPSComputerView.swift
+@@ -13,12 +13,11 @@ struct RPSComputerView: View {
+         RPSMatchController
+ 
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+     @State private var humanHistory: [RPSChoice] = []
+     @State private var computerThinking = false
+     @State private var showResultOverlay = false
+     @State private var showQuitConfirmation = false
+-    @State private var feedback:
+-        RPSFeedbackMessage?
+     @State private var computerTask:
+         Task<Void, Never>?
+ 
+@@ -81,7 +80,7 @@ struct RPSComputerView: View {
+                 showsProgress:
+                     computerThinking,
+                 hidesLockedChoice: false,
+-                feedback: feedback,
++                feedback: nil,
+                 onChoiceSelected:
+                     selectHumanChoice,
+                 onQuitRequested: {
+@@ -91,11 +90,19 @@ struct RPSComputerView: View {
+ 
+             if controller.state.isFinished &&
+                 showResultOverlay {
+-                RPSSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbol,
+                     accentColor: resultColor,
++                    buttonGradient: RPSTheme.primaryGradient,
++                    cardBackground: RPSTheme.cardBackground,
++                    usesGradientBorder: false,
++                    firstPlayerName: "You",
++                    secondPlayerName: "Computer",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: RPSTheme.brightBlue,
++                    secondPlayerColor: RPSTheme.brightPurple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         computerTask?.cancel()
+@@ -136,6 +143,8 @@ struct RPSComputerView: View {
+                 return
+             }
+ 
++            recordFinishedRound()
++
+             try? await Task.sleep(
+                 nanoseconds: 950_000_000
+             )
+@@ -280,51 +289,38 @@ struct RPSComputerView: View {
+                     : .warning
+                 )
+ 
+-            showFeedback(
+-                resultTitle,
+-                tone:
+-                    localRoundResult == .win
+-                    ? .success
+-                    : localRoundResult == .loss
+-                    ? .danger
+-                    : .neutral
+-            )
+         }
+     }
+ 
++    private func recordFinishedRound() {
++        let outcome: GameSessionRoundOutcome
++
++        switch localRoundResult {
++        case .win:
++            outcome = .firstPlayerWin
++        case .loss:
++            outcome = .secondPlayerWin
++        case .draw:
++            outcome = .draw
++        }
++
++        sessionScore.record(
++            outcome,
++            roundNumber: roundNumber
++        )
++    }
++
+     private func playAgain() {
+         computerTask?.cancel()
+         computerTask = nil
+ 
+         roundNumber += 1
+         showResultOverlay = false
+-        feedback = nil
+         computerThinking = false
+ 
+         controller.reset()
+     }
+ 
+-    private func showFeedback(
+-        _ text: String,
+-        tone: RPSFeedbackTone
+-    ) {
+-        feedback = RPSFeedbackMessage(
+-            text: text,
+-            tone: tone
+-        )
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            if feedback?.text == text {
+-                withAnimation(
+-                    .easeOut(duration: 0.18)
+-                ) {
+-                    feedback = nil
+-                }
+-            }
+-        }
+-    }
+ 
+     private var canHumanChoose: Bool {
+         !computerThinking &&
+diff --git a/NearPlay/Games/RockPaperScissors/Modes/RPSLocalView.swift b/NearPlay/Games/RockPaperScissors/Modes/RPSLocalView.swift
+index d6ad96a..4e28674 100644
+--- a/NearPlay/Games/RockPaperScissors/Modes/RPSLocalView.swift
++++ b/NearPlay/Games/RockPaperScissors/Modes/RPSLocalView.swift
+@@ -15,6 +15,7 @@ struct RPSLocalView: View {
+         RPSMatchController
+ 
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+     @State private var showResultOverlay = false
+     @State private var showQuitConfirmation = false
+     @State private var feedback:
+@@ -83,11 +84,19 @@ struct RPSLocalView: View {
+ 
+             if controller.state.isFinished &&
+                 showResultOverlay {
+-                RPSSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbol,
+                     accentColor: resultColor,
++                    buttonGradient: RPSTheme.primaryGradient,
++                    cardBackground: RPSTheme.cardBackground,
++                    usesGradientBorder: false,
++                    firstPlayerName: localPlayerDisplayName,
++                    secondPlayerName: "Guest",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: RPSTheme.brightBlue,
++                    secondPlayerColor: RPSTheme.brightPurple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         dismiss()
+@@ -122,6 +131,8 @@ struct RPSLocalView: View {
+                 return
+             }
+ 
++            recordFinishedRound()
++
+             try? await Task.sleep(
+                 nanoseconds: 950_000_000
+             )
+@@ -181,12 +192,12 @@ struct RPSLocalView: View {
+             )
+             .impactOccurred()
+ 
+-            showFeedback(
+-                playerID == Self.playerOneID
+-                ? "First move locked. Pass the phone."
+-                : "Second move locked.",
+-                tone: .neutral
+-            )
++            if playerID == Self.playerOneID {
++                showFeedback(
++                    "First move locked. Pass the phone.",
++                    tone: .neutral
++                )
++            }
+ 
+         case .completed:
+             UINotificationFeedbackGenerator()
+@@ -196,16 +207,26 @@ struct RPSLocalView: View {
+                     : .success
+                 )
+ 
+-            showFeedback(
+-                resultTitle,
+-                tone:
+-                    controller.state.isDraw
+-                    ? .neutral
+-                    : .success
+-            )
+         }
+     }
+ 
++    private func recordFinishedRound() {
++        let outcome: GameSessionRoundOutcome
++
++        if controller.state.isDraw {
++            outcome = .draw
++        } else if controller.state.winnerPlayerID == Self.playerOneID {
++            outcome = .firstPlayerWin
++        } else {
++            outcome = .secondPlayerWin
++        }
++
++        sessionScore.record(
++            outcome,
++            roundNumber: roundNumber
++        )
++    }
++
+     private func playAgain() {
+         roundNumber += 1
+         showResultOverlay = false
+diff --git a/NearPlay/Games/RockPaperScissors/Modes/RPSView.swift b/NearPlay/Games/RockPaperScissors/Modes/RPSView.swift
+index 42c3a41..50715b2 100644
+--- a/NearPlay/Games/RockPaperScissors/Modes/RPSView.swift
++++ b/NearPlay/Games/RockPaperScissors/Modes/RPSView.swift
+@@ -30,9 +30,6 @@ struct RPSView: View {
+     @State private var isQuitting = false
+     @State private var showResultOverlay = false
+ 
+-    @State private var feedback:
+-        RPSFeedbackMessage?
+-
+     init(
+         game: Game,
+         nearbyService: NearbyService,
+@@ -112,7 +109,7 @@ struct RPSView: View {
+                     pendingChoice ||
+                     awaitingRoundReset,
+                 hidesLockedChoice: false,
+-                feedback: feedback,
++                feedback: nil,
+                 onChoiceSelected:
+                     selectChoice,
+                 onQuitRequested: {
+@@ -175,7 +172,6 @@ struct RPSView: View {
+ 
+             showResultOverlay = false
+             pendingChoice = false
+-            feedback = nil
+ 
+             if isLocalHost {
+                 currentRoundNumber = confirmedRound
+@@ -355,15 +351,6 @@ struct RPSView: View {
+                     : .warning
+                 )
+ 
+-            showFeedback(
+-                resultTitle,
+-                tone:
+-                    localRoundResult == .win
+-                    ? .success
+-                    : localRoundResult == .loss
+-                    ? .danger
+-                    : .neutral
+-            )
+         }
+ 
+         if shouldBroadcast {
+@@ -422,7 +409,6 @@ struct RPSView: View {
+ 
+             pendingChoice = false
+             awaitingRoundReset = false
+-            feedback = nil
+ 
+             controller.applyRemoteState(
+                 payload.state,
+@@ -543,30 +529,6 @@ struct RPSView: View {
+         }
+     }
+ 
+-    // MARK: - Feedback
+-
+-    private func showFeedback(
+-        _ text: String,
+-        tone: RPSFeedbackTone
+-    ) {
+-        feedback = RPSFeedbackMessage(
+-            text: text,
+-            tone: tone
+-        )
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            if feedback?.text == text {
+-                withAnimation(
+-                    .easeOut(duration: 0.18)
+-                ) {
+-                    feedback = nil
+-                }
+-            }
+-        }
+-    }
+-
+     private func gameResultHapticIfNeeded() {
+         guard controller.state.isFinished else {
+             return
+diff --git a/NearPlay/Games/TicTacToe/Modes/TicTacToeComputerView.swift b/NearPlay/Games/TicTacToe/Modes/TicTacToeComputerView.swift
+index 3b19018..93e1048 100644
+--- a/NearPlay/Games/TicTacToe/Modes/TicTacToeComputerView.swift
++++ b/NearPlay/Games/TicTacToe/Modes/TicTacToeComputerView.swift
+@@ -12,10 +12,10 @@ struct TicTacToeComputerView: View {
+     private var controller: TicTacToeMatchController
+ 
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+     @State private var computerThinking = false
+     @State private var showResultOverlay = false
+     @State private var showQuitConfirmation = false
+-    @State private var feedback: TicTacToeFeedbackMessage?
+     @State private var computerTask: Task<Void, Never>?
+ 
+     private static let humanID =
+@@ -78,7 +78,6 @@ struct TicTacToeComputerView: View {
+                     canHumanPlay,
+                 showsProgress:
+                     computerThinking,
+-                feedback: feedback,
+                 onCellSelected:
+                     selectHumanCell,
+                 onQuitRequested: {
+@@ -88,11 +87,19 @@ struct TicTacToeComputerView: View {
+ 
+             if controller.state.isFinished &&
+                 showResultOverlay {
+-                TicTacToeSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbol,
+                     accentColor: resultColor,
++                    buttonGradient: TicTacToeTheme.primaryGradient,
++                    cardBackground: TicTacToeTheme.cardBackground,
++                    usesGradientBorder: false,
++                    firstPlayerName: "You",
++                    secondPlayerName: "Computer",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: TicTacToeTheme.xBlue,
++                    secondPlayerColor: TicTacToeTheme.oPurple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         computerTask?.cancel()
+@@ -133,6 +140,8 @@ struct TicTacToeComputerView: View {
+                 return
+             }
+ 
++            recordFinishedRound()
++
+             try? await Task.sleep(
+                 nanoseconds: 750_000_000
+             )
+@@ -257,19 +266,11 @@ struct TicTacToeComputerView: View {
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.success)
+ 
+-            showFeedback(
+-                "You won!",
+-                tone: .success
+-            )
+ 
+         case .draw:
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "Draw",
+-                tone: .neutral
+-            )
+         }
+     }
+ 
+@@ -290,29 +291,37 @@ struct TicTacToeComputerView: View {
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "Computer won!",
+-                tone: .danger
+-            )
+ 
+         case .draw:
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "Draw",
+-                tone: .neutral
+-            )
+         }
+     }
+ 
++    private func recordFinishedRound() {
++        let outcome: GameSessionRoundOutcome
++
++        if controller.state.isDraw {
++            outcome = .draw
++        } else if controller.state.winnerPlayerID == Self.humanID {
++            outcome = .firstPlayerWin
++        } else {
++            outcome = .secondPlayerWin
++        }
++
++        sessionScore.record(
++            outcome,
++            roundNumber: roundNumber
++        )
++    }
++
+     private func playAgain() {
+         computerTask?.cancel()
+         computerTask = nil
+ 
+         roundNumber += 1
+         showResultOverlay = false
+-        feedback = nil
+         computerThinking = false
+ 
+         let startingPlayerID =
+@@ -327,27 +336,6 @@ struct TicTacToeComputerView: View {
+         scheduleComputerMoveIfNeeded()
+     }
+ 
+-    private func showFeedback(
+-        _ text: String,
+-        tone: TicTacToeFeedbackTone
+-    ) {
+-        feedback = TicTacToeFeedbackMessage(
+-            text: text,
+-            tone: tone
+-        )
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            if feedback?.text == text {
+-                withAnimation(
+-                    .easeOut(duration: 0.18)
+-                ) {
+-                    feedback = nil
+-                }
+-            }
+-        }
+-    }
+ 
+     private var canHumanPlay: Bool {
+         !controller.state.isFinished &&
+diff --git a/NearPlay/Games/TicTacToe/Modes/TicTacToeLocalView.swift b/NearPlay/Games/TicTacToe/Modes/TicTacToeLocalView.swift
+index a006ee9..152250a 100644
+--- a/NearPlay/Games/TicTacToe/Modes/TicTacToeLocalView.swift
++++ b/NearPlay/Games/TicTacToe/Modes/TicTacToeLocalView.swift
+@@ -14,9 +14,9 @@ struct TicTacToeLocalView: View {
+     private var controller: TicTacToeMatchController
+ 
+     @State private var roundNumber = 0
++    @State private var sessionScore = GameSessionScore()
+     @State private var showResultOverlay = false
+     @State private var showQuitConfirmation = false
+-    @State private var feedback: TicTacToeFeedbackMessage?
+ 
+     private static let playerOneID =
+         "tic_tac_toe_local_player_one"
+@@ -72,7 +72,6 @@ struct TicTacToeLocalView: View {
+                 isInteractionEnabled:
+                     !controller.state.isFinished,
+                 showsProgress: false,
+-                feedback: feedback,
+                 onCellSelected:
+                     selectCell,
+                 onQuitRequested: {
+@@ -82,11 +81,19 @@ struct TicTacToeLocalView: View {
+ 
+             if controller.state.isFinished &&
+                 showResultOverlay {
+-                TicTacToeSimpleResultOverlay(
++                SimpleGameResultOverlay(
+                     title: resultTitle,
+                     subtitle: resultSubtitle,
+                     symbolName: resultSymbol,
+                     accentColor: resultColor,
++                    buttonGradient: TicTacToeTheme.primaryGradient,
++                    cardBackground: TicTacToeTheme.cardBackground,
++                    usesGradientBorder: false,
++                    firstPlayerName: localPlayerDisplayName,
++                    secondPlayerName: "Guest",
++                    sessionScore: sessionScore,
++                    firstPlayerColor: TicTacToeTheme.xBlue,
++                    secondPlayerColor: TicTacToeTheme.oPurple,
+                     onPlayAgain: playAgain,
+                     onQuit: {
+                         dismiss()
+@@ -121,6 +128,8 @@ struct TicTacToeLocalView: View {
+                 return
+             }
+ 
++            recordFinishedRound()
++
+             try? await Task.sleep(
+                 nanoseconds: 750_000_000
+             )
+@@ -184,28 +193,34 @@ struct TicTacToeLocalView: View {
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.success)
+ 
+-            showFeedback(
+-                playerID == Self.playerOneID
+-                ? "\(localPlayerDisplayName) won!"
+-                : "Guest won!",
+-                tone: .success
+-            )
+ 
+         case .draw:
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "The round ended in a draw",
+-                tone: .neutral
+-            )
+         }
+     }
+ 
++    private func recordFinishedRound() {
++        let outcome: GameSessionRoundOutcome
++
++        if controller.state.isDraw {
++            outcome = .draw
++        } else if controller.state.winnerPlayerID == Self.playerOneID {
++            outcome = .firstPlayerWin
++        } else {
++            outcome = .secondPlayerWin
++        }
++
++        sessionScore.record(
++            outcome,
++            roundNumber: roundNumber
++        )
++    }
++
+     private func playAgain() {
+         roundNumber += 1
+         showResultOverlay = false
+-        feedback = nil
+ 
+         let startingPlayerID =
+             roundNumber.isMultiple(of: 2)
+@@ -217,27 +232,6 @@ struct TicTacToeLocalView: View {
+         )
+     }
+ 
+-    private func showFeedback(
+-        _ text: String,
+-        tone: TicTacToeFeedbackTone
+-    ) {
+-        feedback = TicTacToeFeedbackMessage(
+-            text: text,
+-            tone: tone
+-        )
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            if feedback?.text == text {
+-                withAnimation(
+-                    .easeOut(duration: 0.18)
+-                ) {
+-                    feedback = nil
+-                }
+-            }
+-        }
+-    }
+ 
+     private var localPlayerDisplayName: String {
+         playerName.isEmpty ? "You" : playerName
+diff --git a/NearPlay/Games/TicTacToe/Modes/TicTacToeView.swift b/NearPlay/Games/TicTacToe/Modes/TicTacToeView.swift
+index 9c69820..b0a8ffb 100644
+--- a/NearPlay/Games/TicTacToe/Modes/TicTacToeView.swift
++++ b/NearPlay/Games/TicTacToe/Modes/TicTacToeView.swift
+@@ -28,9 +28,6 @@ struct TicTacToeView: View {
+     @State private var isQuitting = false
+     @State private var showResultOverlay = false
+ 
+-    @State private var feedback:
+-        TicTacToeFeedbackMessage?
+-
+     init(
+         game: Game,
+         nearbyService: NearbyService,
+@@ -109,8 +106,6 @@ struct TicTacToeView: View {
+                 showsProgress:
+                     pendingMove ||
+                     awaitingRoundReset,
+-                feedback:
+-                    feedback,
+                 onCellSelected:
+                     selectCell,
+                 onQuitRequested: {
+@@ -173,7 +168,6 @@ struct TicTacToeView: View {
+ 
+             showResultOverlay = false
+             pendingMove = false
+-            feedback = nil
+ 
+             let startingPlayerID =
+                 confirmedRound.isMultiple(of: 2)
+@@ -359,15 +353,6 @@ struct TicTacToeView: View {
+                     : .warning
+                 )
+ 
+-            showFeedback(
+-                playerID == localPlayerID
+-                ? "You won the round!"
+-                : "\(opponentName) won the round.",
+-                tone:
+-                    playerID == localPlayerID
+-                    ? .success
+-                    : .danger
+-            )
+ 
+         case .draw:
+             pendingMove = false
+@@ -375,10 +360,6 @@ struct TicTacToeView: View {
+             UINotificationFeedbackGenerator()
+                 .notificationOccurred(.warning)
+ 
+-            showFeedback(
+-                "The round ended in a draw.",
+-                tone: .neutral
+-            )
+         }
+ 
+         if shouldBroadcast {
+@@ -437,7 +418,6 @@ struct TicTacToeView: View {
+ 
+             pendingMove = false
+             awaitingRoundReset = false
+-            feedback = nil
+ 
+             controller.applyRemoteState(
+                 payload.state,
+@@ -560,30 +540,6 @@ struct TicTacToeView: View {
+         }
+     }
+ 
+-    // MARK: - Feedback
+-
+-    private func showFeedback(
+-        _ text: String,
+-        tone: TicTacToeFeedbackTone
+-    ) {
+-        feedback = TicTacToeFeedbackMessage(
+-            text: text,
+-            tone: tone
+-        )
+-
+-        DispatchQueue.main.asyncAfter(
+-            deadline: .now() + 1.15
+-        ) {
+-            if feedback?.text == text {
+-                withAnimation(
+-                    .easeOut(duration: 0.18)
+-                ) {
+-                    feedback = nil
+-                }
+-            }
+-        }
+-    }
+-
+     private func gameResultHapticIfNeeded() {
+         guard controller.state.isFinished else {
+             return
+diff --git a/NearPlay/Games/TicTacToe/UI/TicTacToeGameScreen.swift b/NearPlay/Games/TicTacToe/UI/TicTacToeGameScreen.swift
+index 12b6900..1a81419 100644
+--- a/NearPlay/Games/TicTacToe/UI/TicTacToeGameScreen.swift
++++ b/NearPlay/Games/TicTacToe/UI/TicTacToeGameScreen.swift
+@@ -7,38 +7,7 @@ struct TicTacToePlayerPresentation: Identifiable, Equatable {
+     let inactiveBadge: String
+ }
+ 
+-enum TicTacToeFeedbackTone {
+-    case neutral
+-    case success
+-    case danger
+-
+-    var color: Color {
+-        switch self {
+-        case .neutral:
+-            return TicTacToeTheme.xBlue
+-        case .success:
+-            return .green
+-        case .danger:
+-            return .red
+-        }
+-    }
+ 
+-    var iconName: String {
+-        switch self {
+-        case .neutral:
+-            return "circle.dotted"
+-        case .success:
+-            return "checkmark.circle.fill"
+-        case .danger:
+-            return "xmark.octagon.fill"
+-        }
+-    }
+-}
+-
+-struct TicTacToeFeedbackMessage: Equatable {
+-    let text: String
+-    let tone: TicTacToeFeedbackTone
+-}
+ 
+ struct TicTacToeGameScreen: View {
+     let gameTitle: String
+@@ -56,7 +25,6 @@ struct TicTacToeGameScreen: View {
+ 
+     let isInteractionEnabled: Bool
+     let showsProgress: Bool
+-    let feedback: TicTacToeFeedbackMessage?
+ 
+     let onCellSelected: (Int) -> Void
+     let onQuitRequested: () -> Void
+@@ -111,14 +79,6 @@ struct TicTacToeGameScreen: View {
+                 }
+             }
+ 
+-            if let feedback {
+-                feedbackBanner(feedback)
+-                    .transition(
+-                        .move(edge: .top)
+-                        .combined(with: .opacity)
+-                    )
+-                    .zIndex(8)
+-            }
+         }
+         .toolbar(.hidden, for: .navigationBar)
+         .navigationBarBackButtonHidden(true)
+@@ -400,32 +360,6 @@ struct TicTacToeGameScreen: View {
+             }
+     }
+ 
+-    private func feedbackBanner(
+-        _ feedback: TicTacToeFeedbackMessage
+-    ) -> some View {
+-        HStack(spacing: 10) {
+-            Image(systemName: feedback.tone.iconName)
+-            Text(feedback.text)
+-                .lineLimit(2)
+-        }
+-        .font(
+-            .system(
+-                size: 14,
+-                weight: .semibold,
+-                design: .rounded
+-            )
+-        )
+-        .foregroundStyle(.white)
+-        .padding(.horizontal, 16)
+-        .frame(height: 48)
+-        .background {
+-            Capsule()
+-                .fill(
+-                    feedback.tone.color.opacity(0.88)
+-                )
+-        }
+-        .padding(.top, 18)
+-    }
+ 
+     private var activeMark: TicTacToeMark {
+         if controller.state.activePlayerID == firstPlayer.id {

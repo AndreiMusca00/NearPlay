@@ -12,10 +12,10 @@ struct TicTacToeComputerView: View {
     private var controller: TicTacToeMatchController
 
     @State private var roundNumber = 0
+    @State private var sessionScore = GameSessionScore()
     @State private var computerThinking = false
     @State private var showResultOverlay = false
     @State private var showQuitConfirmation = false
-    @State private var feedback: TicTacToeFeedbackMessage?
     @State private var computerTask: Task<Void, Never>?
 
     private static let humanID =
@@ -78,7 +78,6 @@ struct TicTacToeComputerView: View {
                     canHumanPlay,
                 showsProgress:
                     computerThinking,
-                feedback: feedback,
                 onCellSelected:
                     selectHumanCell,
                 onQuitRequested: {
@@ -88,11 +87,19 @@ struct TicTacToeComputerView: View {
 
             if controller.state.isFinished &&
                 showResultOverlay {
-                TicTacToeSimpleResultOverlay(
+                SimpleGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: resultSymbol,
                     accentColor: resultColor,
+                    buttonGradient: TicTacToeTheme.primaryGradient,
+                    cardBackground: TicTacToeTheme.cardBackground,
+                    usesGradientBorder: false,
+                    firstPlayerName: "You",
+                    secondPlayerName: "Computer",
+                    sessionScore: sessionScore,
+                    firstPlayerColor: TicTacToeTheme.xBlue,
+                    secondPlayerColor: TicTacToeTheme.oPurple,
                     onPlayAgain: playAgain,
                     onQuit: {
                         computerTask?.cancel()
@@ -132,6 +139,8 @@ struct TicTacToeComputerView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            recordFinishedRound()
 
             try? await Task.sleep(
                 nanoseconds: 750_000_000
@@ -257,19 +266,11 @@ struct TicTacToeComputerView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.success)
 
-            showFeedback(
-                "You won!",
-                tone: .success
-            )
 
         case .draw:
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "Draw",
-                tone: .neutral
-            )
         }
     }
 
@@ -290,20 +291,29 @@ struct TicTacToeComputerView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "Computer won!",
-                tone: .danger
-            )
 
         case .draw:
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "Draw",
-                tone: .neutral
-            )
         }
+    }
+
+    private func recordFinishedRound() {
+        let outcome: GameSessionRoundOutcome
+
+        if controller.state.isDraw {
+            outcome = .draw
+        } else if controller.state.winnerPlayerID == Self.humanID {
+            outcome = .firstPlayerWin
+        } else {
+            outcome = .secondPlayerWin
+        }
+
+        sessionScore.record(
+            outcome,
+            roundNumber: roundNumber
+        )
     }
 
     private func playAgain() {
@@ -312,7 +322,6 @@ struct TicTacToeComputerView: View {
 
         roundNumber += 1
         showResultOverlay = false
-        feedback = nil
         computerThinking = false
 
         let startingPlayerID =
@@ -327,27 +336,6 @@ struct TicTacToeComputerView: View {
         scheduleComputerMoveIfNeeded()
     }
 
-    private func showFeedback(
-        _ text: String,
-        tone: TicTacToeFeedbackTone
-    ) {
-        feedback = TicTacToeFeedbackMessage(
-            text: text,
-            tone: tone
-        )
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            if feedback?.text == text {
-                withAnimation(
-                    .easeOut(duration: 0.18)
-                ) {
-                    feedback = nil
-                }
-            }
-        }
-    }
 
     private var canHumanPlay: Bool {
         !controller.state.isFinished &&

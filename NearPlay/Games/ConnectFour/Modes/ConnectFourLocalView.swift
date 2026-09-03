@@ -20,10 +20,9 @@ struct ConnectFourLocalView: View {
         ConnectFourMatchController
 
     @State private var roundNumber = 0
+    @State private var sessionScore = GameSessionScore()
     @State private var showResultOverlay = false
     @State private var showQuitConfirmation = false
-    @State private var feedback:
-        ConnectFourFeedbackMessage?
 
     private static let playerOneID =
         "connect_four_local_player_one"
@@ -81,7 +80,6 @@ struct ConnectFourLocalView: View {
                 isInteractionEnabled:
                     !controller.state.isFinished,
                 showsProgress: false,
-                feedback: feedback,
                 onColumnSelected:
                     selectColumn,
                 onQuitRequested: {
@@ -91,11 +89,19 @@ struct ConnectFourLocalView: View {
 
             if controller.state.isFinished &&
                 showResultOverlay {
-                ConnectFourSimpleResultOverlay(
+                SimpleGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: resultSymbol,
                     accentColor: resultColor,
+                    buttonGradient: ConnectFourTheme.primaryGradient,
+                    cardBackground: ConnectFourTheme.cardBackground,
+                    usesGradientBorder: false,
+                    firstPlayerName: localPlayerDisplayName,
+                    secondPlayerName: "Guest",
+                    sessionScore: sessionScore,
+                    firstPlayerColor: ConnectFourTheme.cyan,
+                    secondPlayerColor: ConnectFourTheme.purple,
                     onPlayAgain: playAgain,
                     onQuit: {
                         dismiss()
@@ -129,6 +135,8 @@ struct ConnectFourLocalView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            recordFinishedRound()
 
             try? await Task.sleep(
                 nanoseconds: 750_000_000
@@ -195,30 +203,36 @@ struct ConnectFourLocalView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.success)
 
-            showFeedback(
-                playerID == Self.playerOneID
-                ? "\(localPlayerDisplayName) connected four!"
-                : "Guest connected four!",
-                tone: .success
-            )
 
         case .draw:
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "Board full — draw",
-                tone: .neutral
-            )
         }
     }
 
     // MARK: - Rematch
 
+    private func recordFinishedRound() {
+        let outcome: GameSessionRoundOutcome
+
+        if controller.state.isDraw {
+            outcome = .draw
+        } else if controller.state.winnerPlayerID == Self.playerOneID {
+            outcome = .firstPlayerWin
+        } else {
+            outcome = .secondPlayerWin
+        }
+
+        sessionScore.record(
+            outcome,
+            roundNumber: roundNumber
+        )
+    }
+
     private func playAgain() {
         roundNumber += 1
         showResultOverlay = false
-        feedback = nil
 
         let startingPlayerID =
             roundNumber.isMultiple(of: 2)
@@ -228,30 +242,6 @@ struct ConnectFourLocalView: View {
         controller.reset(
             startingPlayerID: startingPlayerID
         )
-    }
-
-    // MARK: - Feedback
-
-    private func showFeedback(
-        _ text: String,
-        tone: ConnectFourFeedbackTone
-    ) {
-        feedback = ConnectFourFeedbackMessage(
-            text: text,
-            tone: tone
-        )
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            if feedback?.text == text {
-                withAnimation(
-                    .easeOut(duration: 0.18)
-                ) {
-                    feedback = nil
-                }
-            }
-        }
     }
 
     // MARK: - Presentation

@@ -13,12 +13,11 @@ struct RPSComputerView: View {
         RPSMatchController
 
     @State private var roundNumber = 0
+    @State private var sessionScore = GameSessionScore()
     @State private var humanHistory: [RPSChoice] = []
     @State private var computerThinking = false
     @State private var showResultOverlay = false
     @State private var showQuitConfirmation = false
-    @State private var feedback:
-        RPSFeedbackMessage?
     @State private var computerTask:
         Task<Void, Never>?
 
@@ -81,7 +80,7 @@ struct RPSComputerView: View {
                 showsProgress:
                     computerThinking,
                 hidesLockedChoice: false,
-                feedback: feedback,
+                feedback: nil,
                 onChoiceSelected:
                     selectHumanChoice,
                 onQuitRequested: {
@@ -91,11 +90,19 @@ struct RPSComputerView: View {
 
             if controller.state.isFinished &&
                 showResultOverlay {
-                RPSSimpleResultOverlay(
+                SimpleGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: resultSymbol,
                     accentColor: resultColor,
+                    buttonGradient: RPSTheme.primaryGradient,
+                    cardBackground: RPSTheme.cardBackground,
+                    usesGradientBorder: false,
+                    firstPlayerName: "You",
+                    secondPlayerName: "Computer",
+                    sessionScore: sessionScore,
+                    firstPlayerColor: RPSTheme.brightBlue,
+                    secondPlayerColor: RPSTheme.brightPurple,
                     onPlayAgain: playAgain,
                     onQuit: {
                         computerTask?.cancel()
@@ -135,6 +142,8 @@ struct RPSComputerView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            recordFinishedRound()
 
             try? await Task.sleep(
                 nanoseconds: 950_000_000
@@ -280,16 +289,25 @@ struct RPSComputerView: View {
                     : .warning
                 )
 
-            showFeedback(
-                resultTitle,
-                tone:
-                    localRoundResult == .win
-                    ? .success
-                    : localRoundResult == .loss
-                    ? .danger
-                    : .neutral
-            )
         }
+    }
+
+    private func recordFinishedRound() {
+        let outcome: GameSessionRoundOutcome
+
+        switch localRoundResult {
+        case .win:
+            outcome = .firstPlayerWin
+        case .loss:
+            outcome = .secondPlayerWin
+        case .draw:
+            outcome = .draw
+        }
+
+        sessionScore.record(
+            outcome,
+            roundNumber: roundNumber
+        )
     }
 
     private func playAgain() {
@@ -298,33 +316,11 @@ struct RPSComputerView: View {
 
         roundNumber += 1
         showResultOverlay = false
-        feedback = nil
         computerThinking = false
 
         controller.reset()
     }
 
-    private func showFeedback(
-        _ text: String,
-        tone: RPSFeedbackTone
-    ) {
-        feedback = RPSFeedbackMessage(
-            text: text,
-            tone: tone
-        )
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            if feedback?.text == text {
-                withAnimation(
-                    .easeOut(duration: 0.18)
-                ) {
-                    feedback = nil
-                }
-            }
-        }
-    }
 
     private var canHumanChoose: Bool {
         !computerThinking &&

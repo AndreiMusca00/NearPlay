@@ -12,38 +12,7 @@ struct ConnectFourPlayerPresentation: Identifiable, Equatable {
     let inactiveBadge: String
 }
 
-enum ConnectFourFeedbackTone {
-    case neutral
-    case success
-    case danger
 
-    var color: Color {
-        switch self {
-        case .neutral:
-            return ConnectFourTheme.blue
-        case .success:
-            return .green
-        case .danger:
-            return .red
-        }
-    }
-
-    var iconName: String {
-        switch self {
-        case .neutral:
-            return "circle.dotted"
-        case .success:
-            return "checkmark.circle.fill"
-        case .danger:
-            return "xmark.octagon.fill"
-        }
-    }
-}
-
-struct ConnectFourFeedbackMessage: Equatable {
-    let text: String
-    let tone: ConnectFourFeedbackTone
-}
 
 struct ConnectFourGameScreen: View {
     let gameTitle: String
@@ -61,7 +30,6 @@ struct ConnectFourGameScreen: View {
 
     let isInteractionEnabled: Bool
     let showsProgress: Bool
-    let feedback: ConnectFourFeedbackMessage?
 
     let onColumnSelected: (Int) -> Void
     let onQuitRequested: () -> Void
@@ -122,14 +90,6 @@ struct ConnectFourGameScreen: View {
                 }
             }
 
-            if let feedback {
-                feedbackBanner(feedback)
-                    .transition(
-                        .move(edge: .top)
-                        .combined(with: .opacity)
-                    )
-                    .zIndex(8)
-            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
@@ -441,57 +401,6 @@ struct ConnectFourGameScreen: View {
                 lineWidth: 1
             )
         }
-    }
-
-    // MARK: - Feedback
-
-    private func feedbackBanner(
-        _ message: ConnectFourFeedbackMessage
-    ) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: message.tone.iconName)
-                .font(
-                    .system(
-                        size: 17,
-                        weight: .bold
-                    )
-                )
-
-            Text(message.text)
-                .font(
-                    .system(
-                        size: 15,
-                        weight: .bold,
-                        design: .rounded
-                    )
-                )
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 18)
-        .frame(height: 48)
-        .background {
-            Capsule()
-                .fill(
-                    message.tone.color.opacity(0.88)
-                )
-        }
-        .overlay {
-            Capsule()
-                .stroke(
-                    Color.white.opacity(0.26),
-                    lineWidth: 1
-                )
-        }
-        .shadow(
-            color:
-                message.tone.color.opacity(0.42),
-            radius: 12
-        )
-        .frame(
-            maxHeight: .infinity,
-            alignment: .top
-        )
-        .padding(.top, 72)
     }
 
     private var activeDisc: ConnectFourDisc {

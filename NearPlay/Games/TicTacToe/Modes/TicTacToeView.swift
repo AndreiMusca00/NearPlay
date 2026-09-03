@@ -28,9 +28,6 @@ struct TicTacToeView: View {
     @State private var isQuitting = false
     @State private var showResultOverlay = false
 
-    @State private var feedback:
-        TicTacToeFeedbackMessage?
-
     init(
         game: Game,
         nearbyService: NearbyService,
@@ -109,8 +106,6 @@ struct TicTacToeView: View {
                 showsProgress:
                     pendingMove ||
                     awaitingRoundReset,
-                feedback:
-                    feedback,
                 onCellSelected:
                     selectCell,
                 onQuitRequested: {
@@ -173,7 +168,6 @@ struct TicTacToeView: View {
 
             showResultOverlay = false
             pendingMove = false
-            feedback = nil
 
             let startingPlayerID =
                 confirmedRound.isMultiple(of: 2)
@@ -359,15 +353,6 @@ struct TicTacToeView: View {
                     : .warning
                 )
 
-            showFeedback(
-                playerID == localPlayerID
-                ? "You won the round!"
-                : "\(opponentName) won the round.",
-                tone:
-                    playerID == localPlayerID
-                    ? .success
-                    : .danger
-            )
 
         case .draw:
             pendingMove = false
@@ -375,10 +360,6 @@ struct TicTacToeView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "The round ended in a draw.",
-                tone: .neutral
-            )
         }
 
         if shouldBroadcast {
@@ -437,7 +418,6 @@ struct TicTacToeView: View {
 
             pendingMove = false
             awaitingRoundReset = false
-            feedback = nil
 
             controller.applyRemoteState(
                 payload.state,
@@ -556,30 +536,6 @@ struct TicTacToeView: View {
                     TicTacToeTheme.primaryGradient,
                     lineWidth: 1.2
                 )
-            }
-        }
-    }
-
-    // MARK: - Feedback
-
-    private func showFeedback(
-        _ text: String,
-        tone: TicTacToeFeedbackTone
-    ) {
-        feedback = TicTacToeFeedbackMessage(
-            text: text,
-            tone: tone
-        )
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            if feedback?.text == text {
-                withAnimation(
-                    .easeOut(duration: 0.18)
-                ) {
-                    feedback = nil
-                }
             }
         }
     }

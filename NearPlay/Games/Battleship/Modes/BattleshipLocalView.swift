@@ -23,6 +23,7 @@ struct BattleshipLocalView: View {
     @State private var localPhase: BattleshipLocalPhase = .placingPlayerOne
     @State private var activePlayerID = Self.playerOneID
     @State private var roundNumber = 0
+    @State private var sessionScore = GameSessionScore()
 
     @State private var pendingAttack = false
     @State private var showQuitConfirmation = false
@@ -97,11 +98,19 @@ struct BattleshipLocalView: View {
 
             if localPhase == .finished &&
                 showResultOverlay {
-                BattleshipSimpleResultOverlay(
+                SimpleGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: resultSymbol,
                     accentColor: resultColor,
+                    buttonGradient: BattleshipTheme.primaryGradient,
+                    cardBackground: BattleshipTheme.cardBackground,
+                    usesGradientBorder: true,
+                    firstPlayerName: playerOneName,
+                    secondPlayerName: "Guest",
+                    sessionScore: sessionScore,
+                    firstPlayerColor: BattleshipTheme.cyan,
+                    secondPlayerColor: BattleshipTheme.purple,
                     onPlayAgain: playAgain,
                     onQuit: {
                         dismiss()
@@ -388,10 +397,6 @@ struct BattleshipLocalView: View {
             localPhase = .battle
         }
 
-        showFeedback(
-            "Battle started",
-            tone: .success
-        )
     }
 
     // MARK: - Battle
@@ -466,11 +471,6 @@ struct BattleshipLocalView: View {
             to: defenderID
         )
 
-        showAttackFeedback(
-            result.outcome,
-            attackerName: playerName(for: attackerID)
-        )
-
         pendingAttack = false
 
         if result.outcome == .gameOver {
@@ -490,6 +490,13 @@ struct BattleshipLocalView: View {
     private func finishBattle(
         winnerID: String
     ) {
+        sessionScore.record(
+            winnerID == Self.playerOneID
+            ? .firstPlayerWin
+            : .secondPlayerWin,
+            roundNumber: roundNumber
+        )
+
         activePlayerID = winnerID
 
         withAnimation(.easeOut(duration: 0.20)) {
@@ -523,34 +530,6 @@ struct BattleshipLocalView: View {
     }
 
     // MARK: - Feedback
-
-    private func showAttackFeedback(
-        _ outcome: BattleshipAttackOutcome,
-        attackerName: String
-    ) {
-        switch outcome {
-        case .miss:
-            showFeedback(
-                "\(attackerName): Miss",
-                tone: .neutral
-            )
-        case .hit:
-            showFeedback(
-                "\(attackerName): Hit!",
-                tone: .warning
-            )
-        case .sunk:
-            showFeedback(
-                "\(attackerName): Ship sunk!",
-                tone: .danger
-            )
-        case .gameOver:
-            showFeedback(
-                "\(attackerName) destroyed the fleet!",
-                tone: .success
-            )
-        }
-    }
 
     private func showFeedback(
         _ text: String,

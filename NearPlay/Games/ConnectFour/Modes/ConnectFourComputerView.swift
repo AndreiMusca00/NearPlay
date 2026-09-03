@@ -18,11 +18,10 @@ struct ConnectFourComputerView: View {
         ConnectFourMatchController
 
     @State private var roundNumber = 0
+    @State private var sessionScore = GameSessionScore()
     @State private var computerThinking = false
     @State private var showResultOverlay = false
     @State private var showQuitConfirmation = false
-    @State private var feedback:
-        ConnectFourFeedbackMessage?
     @State private var computerTask:
         Task<Void, Never>?
 
@@ -88,7 +87,6 @@ struct ConnectFourComputerView: View {
                     canHumanPlay,
                 showsProgress:
                     computerThinking,
-                feedback: feedback,
                 onColumnSelected:
                     selectHumanColumn,
                 onQuitRequested: {
@@ -98,11 +96,19 @@ struct ConnectFourComputerView: View {
 
             if controller.state.isFinished &&
                 showResultOverlay {
-                ConnectFourSimpleResultOverlay(
+                SimpleGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: resultSymbol,
                     accentColor: resultColor,
+                    buttonGradient: ConnectFourTheme.primaryGradient,
+                    cardBackground: ConnectFourTheme.cardBackground,
+                    usesGradientBorder: false,
+                    firstPlayerName: "You",
+                    secondPlayerName: "Computer",
+                    sessionScore: sessionScore,
+                    firstPlayerColor: ConnectFourTheme.cyan,
+                    secondPlayerColor: ConnectFourTheme.purple,
                     onPlayAgain: playAgain,
                     onQuit: {
                         computerTask?.cancel()
@@ -142,6 +148,8 @@ struct ConnectFourComputerView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            recordFinishedRound()
 
             try? await Task.sleep(
                 nanoseconds: 750_000_000
@@ -276,19 +284,11 @@ struct ConnectFourComputerView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.success)
 
-            showFeedback(
-                "Connect Four!",
-                tone: .success
-            )
 
         case .draw:
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "Board full — draw",
-                tone: .neutral
-            )
         }
     }
 
@@ -309,20 +309,29 @@ struct ConnectFourComputerView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "Computer connected four",
-                tone: .danger
-            )
 
         case .draw:
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "Board full — draw",
-                tone: .neutral
-            )
         }
+    }
+
+    private func recordFinishedRound() {
+        let outcome: GameSessionRoundOutcome
+
+        if controller.state.isDraw {
+            outcome = .draw
+        } else if controller.state.winnerPlayerID == Self.humanID {
+            outcome = .firstPlayerWin
+        } else {
+            outcome = .secondPlayerWin
+        }
+
+        sessionScore.record(
+            outcome,
+            roundNumber: roundNumber
+        )
     }
 
     private func playAgain() {
@@ -330,7 +339,6 @@ struct ConnectFourComputerView: View {
         computerTask = nil
         computerThinking = false
         showResultOverlay = false
-        feedback = nil
 
         roundNumber += 1
 
@@ -349,27 +357,6 @@ struct ConnectFourComputerView: View {
         }
     }
 
-    private func showFeedback(
-        _ text: String,
-        tone: ConnectFourFeedbackTone
-    ) {
-        feedback = ConnectFourFeedbackMessage(
-            text: text,
-            tone: tone
-        )
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            if feedback?.text == text {
-                withAnimation(
-                    .easeOut(duration: 0.18)
-                ) {
-                    feedback = nil
-                }
-            }
-        }
-    }
 
     private var canHumanPlay: Bool {
         !computerThinking &&

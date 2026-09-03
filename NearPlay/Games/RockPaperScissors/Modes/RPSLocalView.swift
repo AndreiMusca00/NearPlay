@@ -15,6 +15,7 @@ struct RPSLocalView: View {
         RPSMatchController
 
     @State private var roundNumber = 0
+    @State private var sessionScore = GameSessionScore()
     @State private var showResultOverlay = false
     @State private var showQuitConfirmation = false
     @State private var feedback:
@@ -83,11 +84,19 @@ struct RPSLocalView: View {
 
             if controller.state.isFinished &&
                 showResultOverlay {
-                RPSSimpleResultOverlay(
+                SimpleGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: resultSymbol,
                     accentColor: resultColor,
+                    buttonGradient: RPSTheme.primaryGradient,
+                    cardBackground: RPSTheme.cardBackground,
+                    usesGradientBorder: false,
+                    firstPlayerName: localPlayerDisplayName,
+                    secondPlayerName: "Guest",
+                    sessionScore: sessionScore,
+                    firstPlayerColor: RPSTheme.brightBlue,
+                    secondPlayerColor: RPSTheme.brightPurple,
                     onPlayAgain: playAgain,
                     onQuit: {
                         dismiss()
@@ -121,6 +130,8 @@ struct RPSLocalView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            recordFinishedRound()
 
             try? await Task.sleep(
                 nanoseconds: 950_000_000
@@ -181,12 +192,12 @@ struct RPSLocalView: View {
             )
             .impactOccurred()
 
-            showFeedback(
-                playerID == Self.playerOneID
-                ? "First move locked. Pass the phone."
-                : "Second move locked.",
-                tone: .neutral
-            )
+            if playerID == Self.playerOneID {
+                showFeedback(
+                    "First move locked. Pass the phone.",
+                    tone: .neutral
+                )
+            }
 
         case .completed:
             UINotificationFeedbackGenerator()
@@ -196,14 +207,24 @@ struct RPSLocalView: View {
                     : .success
                 )
 
-            showFeedback(
-                resultTitle,
-                tone:
-                    controller.state.isDraw
-                    ? .neutral
-                    : .success
-            )
         }
+    }
+
+    private func recordFinishedRound() {
+        let outcome: GameSessionRoundOutcome
+
+        if controller.state.isDraw {
+            outcome = .draw
+        } else if controller.state.winnerPlayerID == Self.playerOneID {
+            outcome = .firstPlayerWin
+        } else {
+            outcome = .secondPlayerWin
+        }
+
+        sessionScore.record(
+            outcome,
+            roundNumber: roundNumber
+        )
     }
 
     private func playAgain() {

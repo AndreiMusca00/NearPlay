@@ -30,9 +30,6 @@ struct RPSView: View {
     @State private var isQuitting = false
     @State private var showResultOverlay = false
 
-    @State private var feedback:
-        RPSFeedbackMessage?
-
     init(
         game: Game,
         nearbyService: NearbyService,
@@ -112,7 +109,7 @@ struct RPSView: View {
                     pendingChoice ||
                     awaitingRoundReset,
                 hidesLockedChoice: false,
-                feedback: feedback,
+                feedback: nil,
                 onChoiceSelected:
                     selectChoice,
                 onQuitRequested: {
@@ -175,7 +172,6 @@ struct RPSView: View {
 
             showResultOverlay = false
             pendingChoice = false
-            feedback = nil
 
             if isLocalHost {
                 currentRoundNumber = confirmedRound
@@ -355,15 +351,6 @@ struct RPSView: View {
                     : .warning
                 )
 
-            showFeedback(
-                resultTitle,
-                tone:
-                    localRoundResult == .win
-                    ? .success
-                    : localRoundResult == .loss
-                    ? .danger
-                    : .neutral
-            )
         }
 
         if shouldBroadcast {
@@ -422,7 +409,6 @@ struct RPSView: View {
 
             pendingChoice = false
             awaitingRoundReset = false
-            feedback = nil
 
             controller.applyRemoteState(
                 payload.state,
@@ -539,30 +525,6 @@ struct RPSView: View {
                     RPSTheme.primaryGradient,
                     lineWidth: 1.2
                 )
-            }
-        }
-    }
-
-    // MARK: - Feedback
-
-    private func showFeedback(
-        _ text: String,
-        tone: RPSFeedbackTone
-    ) {
-        feedback = RPSFeedbackMessage(
-            text: text,
-            tone: tone
-        )
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1.15
-        ) {
-            if feedback?.text == text {
-                withAnimation(
-                    .easeOut(duration: 0.18)
-                ) {
-                    feedback = nil
-                }
             }
         }
     }
