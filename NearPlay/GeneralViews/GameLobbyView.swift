@@ -27,6 +27,9 @@ struct GameLobbyView: View {
     @State private var shouldStartGame = false
     @State private var isStartingGame = false
 
+    @State private var showNearbyPermissionAlert = false
+    @State private var showNearPlaySettings = false
+
     @State private var countdownValue: Int?
     @State private var countdownTimer: Timer?
     @State private var hasStartedCountdown = false
@@ -75,6 +78,31 @@ struct GameLobbyView: View {
         game.id == Game.numberRush.id ||
         game.id == Game.battleship.id ||
         game.id == Game.connectFour.id
+    }
+
+    private var hasRequiredNearbyPermissions: Bool {
+        nearbyPermissions.hasRequiredNearbyPermissions
+    }
+
+    private var missingNearbyPermissionsMessage: String {
+        let bluetoothMissing =
+            nearbyPermissions.bluetoothPermission != .allowed
+        let localNetworkMissing =
+            nearbyPermissions.localNetworkPermission != .allowed
+
+        if bluetoothMissing && localNetworkMissing {
+            return "Nearby Play needs Bluetooth and Local Network access before it can search for players. Review these permissions in NearPlay Settings."
+        }
+
+        if bluetoothMissing {
+            return "Nearby Play needs Bluetooth access before it can search for players. Review this permission in NearPlay Settings."
+        }
+
+        if localNetworkMissing {
+            return "Nearby Play needs Local Network access before it can search for players. Review this permission in NearPlay Settings."
+        }
+
+        return "Nearby Play permissions are ready."
     }
 
     private var hasConnectedOpponent: Bool {
@@ -237,10 +265,13 @@ struct GameLobbyView: View {
         .toolbar(.hidden, for: .navigationBar)
         .preferredColorScheme(.dark)
         .onAppear {
-            // Ask for Bluetooth at the point where Nearby Play is actually used.
-            // MultipeerConnectivity remains responsible for the connection itself.
-            nearbyPermissions.requestBluetoothAccess()
+            // Nearby Play never triggers permission prompts from the lobby.
+            // It only checks the known state and blocks discovery when access is missing.
             nearbyPermissions.refreshKnownStatuses()
+
+            DispatchQueue.main.async {
+                showNearbyPermissionAlert = !hasRequiredNearbyPermissions
+            }
         }
         .onDisappear {
             countdownTimer?.invalidate()
@@ -306,6 +337,27 @@ struct GameLobbyView: View {
             isPresented: $shouldStartGame
         ) {
             gameDestination
+        }
+        .navigationDestination(
+            isPresented: $showNearPlaySettings
+        ) {
+            SettingsView(playerName: $playerName)
+        }
+        .alert(
+            "Nearby Play Needs Access",
+            isPresented: $showNearbyPermissionAlert
+        ) {
+            Button("Go Back", role: .cancel) {
+                dismiss()
+            }
+
+            Button("Go to Settings") {
+                DispatchQueue.main.async {
+                    showNearPlaySettings = true
+                }
+            }
+        } message: {
+            Text(missingNearbyPermissionsMessage)
         }
     }
 
@@ -669,12 +721,14 @@ struct GameLobbyView: View {
     // MARK: - Search
 
     private func startSearching() {
-        frozenDiscoveredPeers = nil
+        nearbyPermissions.refreshKnownStatuses()
 
-        // Keep permission monitoring separate from MPC. This Bonjour probe lets
-        // Settings reflect whether Local Network access is allowed/denied.
-        nearbyPermissions.requestBluetoothAccess()
-        nearbyPermissions.checkLocalNetworkAccess()
+        guard hasRequiredNearbyPermissions else {
+            showNearbyPermissionAlert = true
+            return
+        }
+
+        frozenDiscoveredPeers = nil
 
         nearbyService.start(
             gameID: game.id,
@@ -2833,5 +2887,6 @@ private enum LobbyTheme {
     NavigationStack {
         GameLobbyView(game: .ticTacToe)
             .withPlayerNameStorage()
+            .environmentObject(NearbyPermissionsManager())
     }
 }

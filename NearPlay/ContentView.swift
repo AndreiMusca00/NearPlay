@@ -23,9 +23,8 @@ struct ContentView: View {
             .ignoresSafeArea()
 
             if showMainContent {
-                GamesListView()
-                    .withPlayerNameStorage()
-                    .transition(.opacity)
+                OfflineGamesRootView()
+                       .transition(.opacity)
             } else {
                 NearPlayLoadingView()
                     .transition(.opacity)

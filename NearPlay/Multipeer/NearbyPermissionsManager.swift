@@ -50,6 +50,14 @@ final class NearbyPermissionsManager: NSObject, ObservableObject {
         localNetworkPermission != .allowed
     }
 
+    /// The hard gate used by Nearby Play lobbies before discovery can start.
+    /// Radio power is intentionally not part of this permission gate; MPC can choose
+    /// among the transports available to the system.
+    var hasRequiredNearbyPermissions: Bool {
+        bluetoothPermission == .allowed &&
+        localNetworkPermission == .allowed
+    }
+
     /// Useful inside the Nearby lobby if you also want to warn that Bluetooth is switched off.
     var bluetoothNeedsPowerAttention: Bool {
         bluetoothPermission == .allowed && bluetoothPower == .off
