@@ -11,6 +11,7 @@ struct GameLobbyView: View {
     let onExitToHome: (() -> Void)?
 
     @StateObject private var nearbyService = NearbyService()
+    @EnvironmentObject private var nearbyPermissions: NearbyPermissionsManager
 
     @AppStorage(PlayerProfile.nameKey)
     private var playerName: String = ""
@@ -235,6 +236,12 @@ struct GameLobbyView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .preferredColorScheme(.dark)
+        .onAppear {
+            // Ask for Bluetooth at the point where Nearby Play is actually used.
+            // MultipeerConnectivity remains responsible for the connection itself.
+            nearbyPermissions.requestBluetoothAccess()
+            nearbyPermissions.refreshKnownStatuses()
+        }
         .onDisappear {
             countdownTimer?.invalidate()
             countdownTimer = nil
@@ -663,6 +670,11 @@ struct GameLobbyView: View {
 
     private func startSearching() {
         frozenDiscoveredPeers = nil
+
+        // Keep permission monitoring separate from MPC. This Bonjour probe lets
+        // Settings reflect whether Local Network access is allowed/denied.
+        nearbyPermissions.requestBluetoothAccess()
+        nearbyPermissions.checkLocalNetworkAccess()
 
         nearbyService.start(
             gameID: game.id,

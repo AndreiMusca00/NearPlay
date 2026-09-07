@@ -11,6 +11,7 @@ import Foundation
 struct SettingsView: View {
     @Binding var playerName: String
     @EnvironmentObject private var purchaseManager: PurchaseManager
+    @EnvironmentObject private var nearbyPermissions: NearbyPermissionsManager
 
     @State private var isEditingName = false
     @State private var selectedLanguage = "English"
@@ -54,6 +55,80 @@ struct SettingsView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                    }
+
+                    // MARK: - Nearby Play
+
+                    Section {
+                        NearbyPermissionRow(
+                            icon: "antenna.radiowaves.left.and.right",
+                            iconColor: .blue,
+                            title: "Bluetooth",
+                            status: bluetoothStatusText,
+                            isAllowed: nearbyPermissions.bluetoothPermission == .allowed,
+                            isChecking: nearbyPermissions.bluetoothPermission == .checking
+                        )
+
+                        NearbyPermissionRow(
+                            icon: "network",
+                            iconColor: .cyan,
+                            title: "Local Network",
+                            status: nearbyPermissions.localNetworkPermissionTitle,
+                            isAllowed: nearbyPermissions.localNetworkPermission == .allowed,
+                            isChecking: nearbyPermissions.localNetworkPermission == .checking
+                        )
+
+                        if nearbyPermissions.bluetoothNeedsPowerAttention {
+                            Label(
+                                "Bluetooth access is allowed, but Bluetooth is currently turned off.",
+                                systemImage: "exclamationmark.triangle.fill"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        }
+
+                        if nearbyPermissions.bluetoothPermission == .notRequested {
+                            Button {
+                                nearbyPermissions.requestBluetoothAccess()
+                            } label: {
+                                NearbySettingsActionRow(
+                                    icon: "wave.3.right.circle.fill",
+                                    title: "Request Bluetooth Access"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        if nearbyPermissions.localNetworkPermission == .unknown ||
+                            nearbyPermissions.localNetworkPermission == .notRequested {
+                            Button {
+                                nearbyPermissions.checkLocalNetworkAccess()
+                            } label: {
+                                NearbySettingsActionRow(
+                                    icon: "network.badge.shield.half.filled",
+                                    title: "Check Local Network Access"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        if hasDeniedNearbyPermission {
+                            Button {
+                                nearbyPermissions.openAppSettings()
+                            } label: {
+                                NearbySettingsActionRow(
+                                    icon: "gearshape.fill",
+                                    title: "Open iOS Settings"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } header: {
+                        Text("Nearby Play")
+                    } footer: {
+                        Text(
+                            "Bluetooth and Local Network access are used to discover nearby players. The phones do not need to be connected to the same Wi-Fi network."
+                        )
                     }
 
                     // MARK: - Purchases
@@ -178,7 +253,39 @@ struct SettingsView: View {
                 .presentationDetents([.medium])
                 .preferredColorScheme(.dark)
         }
+        .onAppear {
+            // Refresh already-known states without forcing a new permission prompt.
+            nearbyPermissions.refreshKnownStatuses()
+        }
         .preferredColorScheme(.dark)
+    }
+
+    // MARK: - Nearby permissions
+
+    private var bluetoothStatusText: String {
+        guard nearbyPermissions.bluetoothPermission == .allowed else {
+            return nearbyPermissions.bluetoothPermissionTitle
+        }
+
+        switch nearbyPermissions.bluetoothPower {
+        case .on:
+            return "Allowed • On"
+        case .off:
+            return "Allowed • Off"
+        case .resetting:
+            return "Allowed • Resetting…"
+        case .unsupported:
+            return "Allowed • Unavailable"
+        case .unknown:
+            return "Allowed"
+        }
+    }
+
+    private var hasDeniedNearbyPermission: Bool {
+        nearbyPermissions.bluetoothPermission == .denied ||
+        nearbyPermissions.bluetoothPermission == .restricted ||
+        nearbyPermissions.localNetworkPermission == .denied ||
+        nearbyPermissions.localNetworkPermission == .restricted
     }
 
     // MARK: - Background
@@ -274,6 +381,79 @@ struct SettingsView: View {
             }
 
             isRestoringPurchases = false
+        }
+    }
+}
+
+// MARK: - Nearby Permission Row
+
+private struct NearbyPermissionRow: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let status: String
+    let isAllowed: Bool
+    let isChecking: Bool
+
+    var body: some View {
+        HStack(spacing: 14) {
+            SettingsIcon(
+                systemName: icon,
+                color: iconColor
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .foregroundStyle(.white)
+
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(
+                        isAllowed
+                            ? Color.green.opacity(0.9)
+                            : Color.white.opacity(0.5)
+                    )
+            }
+
+            Spacer()
+
+            if isChecking {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(
+                    systemName: isAllowed
+                        ? "checkmark.circle.fill"
+                        : "exclamationmark.circle.fill"
+                )
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(isAllowed ? .green : .orange)
+            }
+        }
+    }
+}
+
+// MARK: - Nearby Settings Action Row
+
+private struct NearbySettingsActionRow: View {
+    let icon: String
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            SettingsIcon(
+                systemName: icon,
+                color: .blue
+            )
+
+            Text(title)
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption.bold())
+                .foregroundStyle(Color.white.opacity(0.3))
         }
     }
 }

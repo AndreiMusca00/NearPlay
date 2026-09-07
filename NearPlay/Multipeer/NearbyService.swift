@@ -33,7 +33,7 @@ final class NearbyService: NSObject, ObservableObject {
 
     let invitationDuration: TimeInterval = 5
 
-    private let serviceType = "nearplay"
+    private let serviceType = NearbyConfiguration.serviceType
 
     private var peerID: MCPeerID?
     private var session: MCSession?

@@ -8,6 +8,7 @@ struct GamesListView: View {
     private var favoriteGameIDs: Binding<Set<String>>
 
     @EnvironmentObject private var purchaseManager: PurchaseManager
+    @EnvironmentObject private var nearbyPermissions: NearbyPermissionsManager
 
     @State private var isEditingName = false
     @State private var selectedFilter: GamesFilter = .all
@@ -161,26 +162,47 @@ struct GamesListView: View {
             NavigationLink {
                 SettingsView(playerName: playerName)
             } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(
-                        .system(
-                            size: 21,
-                            weight: .semibold
-                        )
-                    )
-                    .foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
-                    .background {
-                        Circle()
-                            .fill(Color.white.opacity(0.065))
-                    }
-                    .overlay {
-                        Circle()
-                            .stroke(
-                                Color.white.opacity(0.13),
-                                lineWidth: 1
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "gearshape.fill")
+                        .font(
+                            .system(
+                                size: 21,
+                                weight: .semibold
                             )
+                        )
+                        .foregroundStyle(.white)
+                        .frame(width: 50, height: 50)
+                        .background {
+                            Circle()
+                                .fill(Color.white.opacity(0.065))
+                        }
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    Color.white.opacity(0.13),
+                                    lineWidth: 1
+                                )
+                        }
+
+                    if nearbyPermissions.needsPermissionAttention {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(
+                                .system(
+                                    size: 15,
+                                    weight: .bold
+                                )
+                            )
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .red)
+                            .background(
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 12, height: 12)
+                            )
+                            .offset(x: 2, y: -2)
+                            .accessibilityHidden(true)
                     }
+                }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
