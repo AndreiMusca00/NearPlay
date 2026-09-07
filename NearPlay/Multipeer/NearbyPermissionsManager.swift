@@ -112,9 +112,18 @@ final class NearbyPermissionsManager: NSObject, ObservableObject {
     /// If Local Network access is still undetermined, this operation can cause iOS to
     /// display the Local Network permission alert. If you already start MPC in the lobby,
     /// that MPC operation can be the thing that triggers the alert instead.
-    func checkLocalNetworkAccess() {
+    func checkLocalNetworkAccess(
+        showCheckingState: Bool = true
+    ) {
         localNetworkBrowser?.cancel()
-        localNetworkPermission = .checking
+
+        // An explicit user-initiated check may show "Checking…".
+        // A silent/background refresh MUST keep the last known permission
+        // state so a previously allowed permission does not temporarily
+        // become unavailable to the lobby.
+        if showCheckingState {
+            localNetworkPermission = .checking
+        }
 
         let parameters = NWParameters.tcp
         parameters.includePeerToPeer = true
@@ -179,15 +188,22 @@ final class NearbyPermissionsManager: NSObject, ObservableObject {
         checkLocalNetworkAccess()
     }
 
-    /// Refreshes states that are already known. This does not intentionally trigger a new
-    /// Local Network prompt when its state is still unknown.
+    /// Silently refreshes states that are already known.
+    ///
+    /// Important: a background Local Network refresh keeps the last known state
+    /// (for example `.allowed`) while the Bonjour probe is running. This prevents
+    /// the Nearby lobby from being falsely blocked by a temporary `.checking` state.
+    /// This does not intentionally trigger a Local Network prompt while the state
+    /// is still unknown.
     func refreshKnownStatuses() {
         refreshBluetoothAuthorizationWithoutPrompt()
         refreshBluetoothPowerState()
 
         if localNetworkPermission != .unknown &&
             localNetworkPermission != .checking {
-            checkLocalNetworkAccess()
+            checkLocalNetworkAccess(
+                showCheckingState: false
+            )
         }
     }
 

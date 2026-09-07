@@ -281,6 +281,16 @@ struct GameLobbyView: View {
                 nearbyService.stop()
             }
         }
+        .onChange(
+            of: nearbyPermissions.bluetoothPermission
+        ) { _, _ in
+            updateNearbyPermissionGate()
+        }
+        .onChange(
+            of: nearbyPermissions.localNetworkPermission
+        ) { _, _ in
+            updateNearbyPermissionGate()
+        }
         .onReceive(
             nearbyService.$lastReceivedMessage
         ) { message in
@@ -718,6 +728,26 @@ struct GameLobbyView: View {
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - Permission gate
+
+    private func updateNearbyPermissionGate() {
+        // Silent refreshes never turn an already-known `.allowed` state
+        // into `.checking`, so this only reacts to meaningful permission changes.
+        if hasRequiredNearbyPermissions {
+            showNearbyPermissionAlert = false
+        } else {
+            showNearbyPermissionAlert = true
+
+            // If discovery somehow started before a permission was revoked,
+            // stop it immediately rather than leaving the lobby in a dead state.
+            if isSearching {
+                nearbyService.stop()
+                isSearching = false
+                progress = 0
+            }
+        }
+    }
+
     // MARK: - Search
 
     private func startSearching() {
@@ -766,9 +796,11 @@ struct GameLobbyView: View {
 
         hasStartedCountdown = true
 
-        // Small visual pause after the connection is established.
+        // TEST: keep Preparing visible for 2 seconds so the
+        // indeterminate progress animation can be inspected clearly.
+        // Change this back after testing if desired.
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.45
+            deadline: .now() + 2.0
         ) {
             guard hasConnectedOpponent,
                   let session = validLobbySession,
@@ -2224,29 +2256,55 @@ private struct ExpiringProgressBar: View {
 }
 
 private struct IndeterminateDialogProgressBar: View {
+
+    @State private var startDate = Date()
+
+    // Duration of one complete left-to-right pass.
+    private let cycleDuration: TimeInterval = 0.9
+
     var body: some View {
-        TimelineView(.animation) { timeline in
-            let time = timeline.date
-                .timeIntervalSinceReferenceDate
-            let progress = (time * 0.7)
-                .truncatingRemainder(dividingBy: 1)
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+            let elapsed = timeline.date
+                .timeIntervalSince(startDate)
+
+            let progress = (
+                elapsed / cycleDuration
+            )
+            .truncatingRemainder(dividingBy: 1)
 
             GeometryReader { geometry in
+                let width = geometry.size.width
+                let segmentWidth = width * 0.34
+
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.white.opacity(0.08))
+                        .fill(
+                            Color.white.opacity(0.08)
+                        )
 
                     LobbyTheme.primaryGradient
-                        .frame(width: geometry.size.width * 0.34)
+                        .frame(
+                            width: segmentWidth,
+                            height: geometry.size.height
+                        )
                         .offset(
                             x:
-                                (geometry.size.width * 1.34) * progress -
-                                geometry.size.width * 0.34
+                                (width + segmentWidth) * progress
+                                - segmentWidth
                         )
-                        .clipShape(Capsule())
                 }
+                .frame(
+                    width: width,
+                    height: geometry.size.height
+                )
                 .clipShape(Capsule())
             }
+        }
+        .frame(maxWidth: .infinity)
+        .onAppear {
+            // Every Preparing presentation starts a fresh cycle
+            // from the left edge instead of inheriting global clock phase.
+            startDate = Date()
         }
     }
 }
