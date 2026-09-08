@@ -25,6 +25,8 @@ struct RPSView: View {
     @State private var pendingChoice = false
     @State private var awaitingRoundReset = false
     @State private var currentRoundNumber = 0
+    @State private var sessionScore = GameSessionScore()
+    @State private var scoreRoundNumber = 1
 
     @State private var showQuitConfirmation = false
     @State private var isQuitting = false
@@ -125,6 +127,9 @@ struct RPSView: View {
                     subtitle: resultSubtitle,
                     symbolName: resultSymbolName,
                     accentColor: resultAccentColor,
+                    firstPlayerName: localPlayerName,
+                    secondPlayerName: opponentName,
+                    sessionScore: sessionScore,
                     rematchState:
                         rematchController.state,
                     onPrimaryAction: {
@@ -170,6 +175,8 @@ struct RPSView: View {
                 return
             }
 
+            scoreRoundNumber = confirmedRound
+
             showResultOverlay = false
             pendingChoice = false
 
@@ -196,6 +203,11 @@ struct RPSView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            sessionScore.record(
+                localResult: localRoundResult,
+                roundNumber: scoreRoundNumber
+            )
 
             gameResultHapticIfNeeded()
 

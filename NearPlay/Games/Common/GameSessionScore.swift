@@ -33,6 +33,27 @@ struct GameSessionScore {
         }
     }
 
+    mutating func record(
+        localResult: GameRoundResult,
+        roundNumber: Int
+    ) {
+        let outcome: GameSessionRoundOutcome
+
+        switch localResult {
+        case .win:
+            outcome = .firstPlayerWin
+        case .loss:
+            outcome = .secondPlayerWin
+        case .draw:
+            outcome = .draw
+        }
+
+        record(
+            outcome,
+            roundNumber: roundNumber
+        )
+    }
+
     var totalRounds: Int {
         firstPlayerWins + secondPlayerWins + draws
     }

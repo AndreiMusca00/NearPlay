@@ -9,6 +9,11 @@ struct GameResultOverlay: View {
     let subtitle: String
     let symbolName: String
     let accentColor: Color
+
+    let firstPlayerName: String
+    let secondPlayerName: String
+    let sessionScore: GameSessionScore
+
     let rematchState: RematchState
     let onPrimaryAction: () -> Void
     let onQuit: () -> Void
@@ -51,6 +56,7 @@ struct GameResultOverlay: View {
             closeRow
             resultVisual
             resultText
+            sessionScoreSection
             rematchInformation
             actionButtons
         }
@@ -74,6 +80,7 @@ struct GameResultOverlay: View {
                     quitIconButton
                 }
 
+                sessionScoreSection
                 rematchInformation
                 actionButtons
             }
@@ -165,6 +172,18 @@ struct GameResultOverlay: View {
                 .foregroundStyle(Color.white.opacity(0.52))
                 .multilineTextAlignment(.center)
         }
+    }
+
+    private var sessionScoreSection: some View {
+        SessionScoreView(
+            firstPlayerName: firstPlayerName,
+            secondPlayerName: secondPlayerName,
+            firstPlayerScore: sessionScore.firstPlayerWins,
+            secondPlayerScore: sessionScore.secondPlayerWins,
+            draws: sessionScore.draws,
+            firstPlayerColor: ResultOverlayTheme.blue,
+            secondPlayerColor: ResultOverlayTheme.purple
+        )
     }
 
     private var rematchInformation: some View {

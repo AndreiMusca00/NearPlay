@@ -21,6 +21,8 @@ struct NumberRushView: View {
     private var rematchController: RematchController
 
     @State private var currentRoundNumber = 1
+    @State private var sessionScore = GameSessionScore()
+    @State private var scoreRoundNumber = 1
     @State private var wrongNumber: Int?
     @State private var correctNumber: Int?
     @State private var feedback: NumberRushFeedbackMessage?
@@ -122,6 +124,9 @@ struct NumberRushView: View {
                     subtitle: resultSubtitle,
                     symbolName: resultSymbolName,
                     accentColor: resultAccentColor,
+                    firstPlayerName: localPlayerName,
+                    secondPlayerName: opponentName,
+                    sessionScore: sessionScore,
                     rematchState:
                         rematchController.state,
                     onPrimaryAction: {
@@ -174,6 +179,8 @@ struct NumberRushView: View {
                 return
             }
 
+            scoreRoundNumber = confirmedRound
+
             showResultOverlay = false
             wrongNumber = nil
             correctNumber = nil
@@ -211,6 +218,11 @@ struct NumberRushView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            sessionScore.record(
+                localResult: localRoundResult,
+                roundNumber: scoreRoundNumber
+            )
 
             timeoutWorkItem?.cancel()
 

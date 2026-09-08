@@ -32,6 +32,8 @@ struct ConnectFourView: View {
     @State private var pendingMove = false
     @State private var awaitingRoundReset = false
     @State private var currentRoundNumber = 0
+    @State private var sessionScore = GameSessionScore()
+    @State private var scoreRoundNumber = 1
 
     @State private var showQuitConfirmation = false
     @State private var isQuitting = false
@@ -128,6 +130,9 @@ struct ConnectFourView: View {
                     subtitle: resultSubtitle,
                     symbolName: resultSymbolName,
                     accentColor: resultAccentColor,
+                    firstPlayerName: localPlayerName,
+                    secondPlayerName: opponentName,
+                    sessionScore: sessionScore,
                     rematchState:
                         rematchController.state,
                     onPrimaryAction: {
@@ -172,6 +177,8 @@ struct ConnectFourView: View {
                 return
             }
 
+            scoreRoundNumber = confirmedRound
+
             showResultOverlay = false
             pendingMove = false
 
@@ -206,6 +213,11 @@ struct ConnectFourView: View {
             guard controller.state.isFinished else {
                 return
             }
+
+            sessionScore.record(
+                localResult: localRoundResult,
+                roundNumber: scoreRoundNumber
+            )
 
             try? await Task.sleep(
                 nanoseconds: 850_000_000

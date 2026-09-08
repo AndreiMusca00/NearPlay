@@ -23,6 +23,8 @@ struct BattleshipView: View {
     private var rematchController: RematchController
 
     @State private var battleship = BattleshipGame()
+    @State private var sessionScore = GameSessionScore()
+    @State private var scoreRoundNumber = 1
 
 
     @State private var pendingAttack = false
@@ -141,6 +143,9 @@ struct BattleshipView: View {
                     subtitle: resultSubtitle,
                     symbolName: resultSymbol,
                     accentColor: resultColor,
+                    firstPlayerName: localPlayerName,
+                    secondPlayerName: opponentName,
+                    sessionScore: sessionScore,
                     rematchState:
                         rematchController.state,
                     onPrimaryAction: {
@@ -188,6 +193,8 @@ struct BattleshipView: View {
                 return
             }
 
+            scoreRoundNumber = confirmedRound
+
             withAnimation(.easeOut(duration: 0.20)) {
                 showResultOverlay = false
             }
@@ -207,6 +214,11 @@ struct BattleshipView: View {
             guard battleship.phase == .finished else {
                 return
             }
+
+            sessionScore.record(
+                localResult: roundResult,
+                roundNumber: scoreRoundNumber
+            )
 
             try? await Task.sleep(
                 nanoseconds: 850_000_000
