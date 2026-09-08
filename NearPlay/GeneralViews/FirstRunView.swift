@@ -133,6 +133,11 @@ struct FirstRunView: View {
                                     blue: 1.00
                                 )
                             )
+                            .onChange(of: name) { _, newValue in
+                                if newValue.count > 10 {
+                                    name = String(newValue.prefix(10))
+                                }
+                            }
                             .textInputAutocapitalization(.words)
                             .disableAutocorrection(true)
                             .submitLabel(.continue)
