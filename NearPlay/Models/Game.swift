@@ -89,23 +89,6 @@ extension Game {
         ]
     )
 
-    static let rockPaperScissors = Game(
-        id: "rock_paper_scissors",
-        title: "Rock Paper Scissors",
-        shortDescription: "Choose your move and defeat your opponent.",
-        minPlayers: 2,
-        maxPlayers: 2,
-        imageName: "game_rock_paper_scissors",
-        fallbackSystemImage: "hand.raised.fill",
-        accentHex: "#914DFF",
-        supportedModes: [
-            .nearby,
-            .local,
-            .computer
-        ]
-    )
-
-
     static let numberRush = Game(
         id: "number_rush",
         title: "Number Rush",
@@ -160,7 +143,6 @@ extension Game {
 
     static let all: [Game] = [
         ticTacToe,
-        rockPaperScissors,
         numberRush,
         battleship,
         connectFour

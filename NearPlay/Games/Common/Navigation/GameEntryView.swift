@@ -78,11 +78,6 @@ struct GameEntryView: View {
                 game: game
             )
 
-        case Game.rockPaperScissors.id:
-            RPSLocalView(
-                game: game
-            )
-
         case Game.numberRush.id:
             NumberRushLocalView(
                 game: game
@@ -112,13 +107,6 @@ struct GameEntryView: View {
         switch game.id {
         case Game.ticTacToe.id:
             TicTacToeComputerView(
-                game: game,
-                difficulty:
-                    selectedDifficulty
-            )
-
-        case Game.rockPaperScissors.id:
-            RPSComputerView(
                 game: game,
                 difficulty:
                     selectedDifficulty

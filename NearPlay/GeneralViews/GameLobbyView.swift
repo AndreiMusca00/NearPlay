@@ -39,11 +39,8 @@ struct GameLobbyView: View {
     @State private var frozenDiscoveredPeers: [NearbyPeer]?
 
     // Tic-Tac-Toe
-
     @State private var ticTacToeStartPayload: TicTacToeStartPayload?
 
-    // Rock Paper Scissors
-    @State private var rpsStartPayload: RPSStartPayload?
 
     // Number Rush
     @State private var numberRushStartPayload: NumberRushStartPayload?
@@ -74,7 +71,6 @@ struct GameLobbyView: View {
 
     private var isSupportedGame: Bool {
         game.id == Game.ticTacToe.id ||
-        game.id == Game.rockPaperScissors.id ||
         game.id == Game.numberRush.id ||
         game.id == Game.battleship.id ||
         game.id == Game.connectFour.id
@@ -946,9 +942,6 @@ struct GameLobbyView: View {
         case Game.ticTacToe.id:
             startTicTacToe()
 
-        case Game.rockPaperScissors.id:
-            startRockPaperScissors()
-
         case Game.numberRush.id:
             startNumberRush()
 
@@ -1009,49 +1002,6 @@ struct GameLobbyView: View {
         }
     }
 
-    private func startRockPaperScissors() {
-        guard let firstPeer = connectedOpponent,
-              let session = validLobbySession else {
-            isStartingGame = false
-            return
-        }
-
-        let payload = RPSStartPayload(
-            sessionID: session.sessionID,
-            playerOneID: nearbyService.localPlayerID,
-            playerOneName: safePlayerName,
-            playerTwoID: firstPeer.id,
-            playerTwoName: firstPeer.displayName,
-            initialState:
-                RPSGame.makeInitialState()
-        )
-
-        do {
-            let data = try JSONEncoder().encode(payload)
-
-            let message = NearbyMessage(
-                gameID: game.id,
-                senderName: safePlayerName,
-                type: .gameStart,
-                payload: data
-            )
-
-            nearbyService.send(message)
-
-            rpsStartPayload = payload
-            shouldStartGame = true
-        } catch {
-            isStartingGame = false
-            hasStartedCountdown = false
-            nearbyService.errorMessage =
-                "Failed to start Rock Paper Scissors."
-
-            print(
-                "Failed to encode RPSStartPayload: \(error)"
-            )
-        }
-    }
-    
     private func startNumberRush() {
         guard let firstPeer = connectedOpponent,
               let session = validLobbySession else {
@@ -1218,9 +1168,6 @@ struct GameLobbyView: View {
             case Game.ticTacToe.id:
                 handleTicTacToeStart(data)
 
-            case Game.rockPaperScissors.id:
-                handleRockPaperScissorsStart(data)
-
             case Game.numberRush.id:
                 handleNumberRushStart(data)
 
@@ -1261,29 +1208,7 @@ struct GameLobbyView: View {
         }
     }
 
-    private func handleRockPaperScissorsStart(
-        _ data: Data
-    ) {
-        do {
-            let payload = try JSONDecoder().decode(
-                RPSStartPayload.self,
-                from: data
-            )
-
-            rpsStartPayload = payload
-            isStartingGame = true
-            shouldStartGame = true
-        } catch {
-            nearbyService.errorMessage =
-                "Failed to start Rock Paper Scissors."
-
-            print(
-                "Failed to decode RPSStartPayload: \(error)"
-            )
-        }
-    }
-
-
+  
     private func handleNumberRushStart(
         _ data: Data
     ) {
@@ -1392,38 +1317,7 @@ struct GameLobbyView: View {
                     ),
                 onExitToHome: exitToHome
             )
-        case Game.rockPaperScissors.id:
-            RPSView(
-                game: game,
-                nearbyService: nearbyService,
-                localPlayerName: safePlayerName,
-                startPayload:
-                    rpsStartPayload ??
-                    RPSStartPayload(
-                        sessionID:
-                            nearbyService
-                            .lobbySession?
-                            .sessionID ??
-                            UUID().uuidString,
-                        playerOneID:
-                            nearbyService.localPlayerID,
-                        playerOneName:
-                            safePlayerName,
-                        playerTwoID:
-                            nearbyService
-                            .connectedPeers
-                            .first?
-                            .id ?? "peer",
-                        playerTwoName:
-                            nearbyService
-                            .connectedPeers
-                            .first?
-                            .displayName ?? "Peer",
-                        initialState:
-                            RPSGame.makeInitialState()
-                    ),
-                onExitToHome: exitToHome
-            )
+       
 
 
         case Game.numberRush.id:
