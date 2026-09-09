@@ -13,12 +13,10 @@ struct NearbyPermissionsOnboardingView: View {
     private enum SetupStage: Equatable {
         case idle
         case requestingBluetooth
-        case requestingLocalNetwork
         case readyToProceed
     }
 
     @State private var setupStage: SetupStage = .idle
-    @State private var didStartLocalNetworkRequest = false
 
     var body: some View {
         ZStack {
@@ -40,8 +38,6 @@ struct NearbyPermissionsOnboardingView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
-            // Refresh only already-known states. This does not intentionally
-            // trigger a brand-new Local Network permission prompt.
             nearbyPermissions.refreshKnownStatuses()
         }
         .onChange(of: nearbyPermissions.bluetoothPermission) { _, newValue in
@@ -50,16 +46,6 @@ struct NearbyPermissionsOnboardingView: View {
                 return
             }
 
-            requestLocalNetworkIfNeeded()
-        }
-        .onChange(of: nearbyPermissions.localNetworkPermission) { _, newValue in
-            guard setupStage == .requestingLocalNetwork,
-                  localNetworkDecisionReached(newValue) else {
-                return
-            }
-
-            // IMPORTANT: do not complete/navigate the onboarding here.
-            // We only unlock the Proceed button. The user decides when to leave.
             withAnimation(.easeInOut(duration: 0.2)) {
                 setupStage = .readyToProceed
             }
@@ -79,7 +65,7 @@ struct NearbyPermissionsOnboardingView: View {
                     .stroke(Color.white.opacity(0.10), lineWidth: 1)
                     .frame(width: 108, height: 108)
 
-                Image(systemName: "antenna.radiowaves.left.and.right")
+                Image(systemName: "wave.3.right")
                     .font(.system(size: 43, weight: .medium))
                     .foregroundStyle(primaryGradient)
             }
@@ -97,7 +83,7 @@ struct NearbyPermissionsOnboardingView: View {
                     .multilineTextAlignment(.center)
 
                 Text(
-                    "NearPlay connects nearby devices directly. No internet connection is required, and both players do not need to be connected to the same Wi-Fi network."
+                    "NearPlay connects nearby devices directly over Bluetooth. No internet connection or Wi-Fi network is required."
                 )
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(Color.white.opacity(0.60))
@@ -107,28 +93,15 @@ struct NearbyPermissionsOnboardingView: View {
         }
     }
 
-    // MARK: - Permissions
+    // MARK: - Permission
 
     private var permissionsCard: some View {
-        VStack(spacing: 0) {
-            permissionRow(
-                icon: "wave.3.right",
-                title: "Bluetooth",
-                text: "Helps NearPlay discover and connect to players close to you.",
-                state: bluetoothDisplayState
-            )
-
-            Divider()
-                .overlay(Color.white.opacity(0.08))
-                .padding(.leading, 64)
-
-            permissionRow(
-                icon: "network",
-                title: "Local Network",
-                text: "Allows nearby devices to discover each other and communicate directly.",
-                state: localNetworkDisplayState
-            )
-        }
+        permissionRow(
+            icon: "wave.3.right",
+            title: "Bluetooth",
+            text: "Allows NearPlay to discover, connect to, and play with people close to you.",
+            state: bluetoothDisplayState
+        )
         .background {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color.white.opacity(0.045))
@@ -219,7 +192,7 @@ struct NearbyPermissionsOnboardingView: View {
                 primaryButtonTapped()
             } label: {
                 HStack(spacing: 10) {
-                    if isRequestingPermissions {
+                    if setupStage == .requestingBluetooth {
                         ProgressView()
                             .tint(.white)
                             .controlSize(.small)
@@ -240,10 +213,10 @@ struct NearbyPermissionsOnboardingView: View {
                     RoundedRectangle(cornerRadius: 17, style: .continuous)
                         .fill(primaryGradient)
                 }
-                .opacity(isRequestingPermissions ? 0.78 : 1.0)
+                .opacity(setupStage == .requestingBluetooth ? 0.78 : 1.0)
             }
             .buttonStyle(.plain)
-            .disabled(isRequestingPermissions)
+            .disabled(setupStage == .requestingBluetooth)
 
             if setupStage == .idle {
                 Button("Not Now") {
@@ -259,7 +232,7 @@ struct NearbyPermissionsOnboardingView: View {
                 Text(completionMessage)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(
-                        allPermissionsAllowed
+                        nearbyPermissions.bluetoothPermission == .allowed
                             ? Color.green.opacity(0.80)
                             : Color.orange.opacity(0.82)
                     )
@@ -268,9 +241,9 @@ struct NearbyPermissionsOnboardingView: View {
                     .transition(.opacity)
             } else {
                 Text(
-                    isRequestingPermissions
-                        ? "Please answer both iOS permission prompts to finish setup."
-                        : "You can review or change these permissions later from NearPlay Settings."
+                    setupStage == .requestingBluetooth
+                        ? "Please answer the iOS Bluetooth permission prompt to finish setup."
+                        : "You can review or change Bluetooth access later from NearPlay Settings."
                 )
                 .font(.system(size: 12))
                 .foregroundStyle(Color.white.opacity(0.32))
@@ -287,29 +260,21 @@ struct NearbyPermissionsOnboardingView: View {
             return "Enable Nearby Play"
         case .requestingBluetooth:
             return "Waiting for Bluetooth…"
-        case .requestingLocalNetwork:
-            return "Waiting for Local Network…"
         case .readyToProceed:
             return "Proceed"
         }
     }
 
-    private var isRequestingPermissions: Bool {
-        setupStage == .requestingBluetooth ||
-        setupStage == .requestingLocalNetwork
-    }
-
-    private var allPermissionsAllowed: Bool {
-        nearbyPermissions.bluetoothPermission == .allowed &&
-        nearbyPermissions.localNetworkPermission == .allowed
-    }
-
     private var completionMessage: String {
-        if allPermissionsAllowed {
+        if nearbyPermissions.bluetoothPermission == .allowed {
+            if nearbyPermissions.bluetoothPower == .off {
+                return "Bluetooth access is allowed. Turn Bluetooth on before using Nearby Play."
+            }
+
             return "Nearby Play is ready. You can continue."
         }
 
-        return "Setup is complete, but Nearby Play will remain unavailable until the missing permission is enabled in Settings."
+        return "Setup is complete, but Nearby Play will remain unavailable until Bluetooth access is enabled in Settings."
     }
 
     // MARK: - Permission flow
@@ -318,10 +283,8 @@ struct NearbyPermissionsOnboardingView: View {
         switch setupStage {
         case .idle:
             startPermissionFlow()
-
-        case .requestingBluetooth, .requestingLocalNetwork:
+        case .requestingBluetooth:
             break
-
         case .readyToProceed:
             completeOnboarding()
         }
@@ -330,35 +293,19 @@ struct NearbyPermissionsOnboardingView: View {
     private func startPermissionFlow() {
         guard setupStage == .idle else { return }
 
-        didStartLocalNetworkRequest = false
-
         withAnimation(.easeInOut(duration: 0.2)) {
             setupStage = .requestingBluetooth
         }
 
         nearbyPermissions.requestBluetoothAccess()
 
-        // If Bluetooth permission had already been decided before onboarding,
-        // iOS will not show a new prompt and no authorization transition may occur.
-        // In that case, continue immediately to Local Network.
+        // If authorization had already been decided on a previous run,
+        // there may be no state transition callback to wait for.
         if bluetoothDecisionReached(nearbyPermissions.bluetoothPermission) {
-            requestLocalNetworkIfNeeded()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                setupStage = .readyToProceed
+            }
         }
-    }
-
-    private func requestLocalNetworkIfNeeded() {
-        guard setupStage == .requestingBluetooth,
-              !didStartLocalNetworkRequest else {
-            return
-        }
-
-        didStartLocalNetworkRequest = true
-
-        withAnimation(.easeInOut(duration: 0.2)) {
-            setupStage = .requestingLocalNetwork
-        }
-
-        nearbyPermissions.checkLocalNetworkAccess()
     }
 
     private func bluetoothDecisionReached(
@@ -372,21 +319,7 @@ struct NearbyPermissionsOnboardingView: View {
         }
     }
 
-    private func localNetworkDecisionReached(
-        _ state: NearbyPermissionsManager.PermissionState
-    ) -> Bool {
-        switch state {
-        case .allowed, .denied, .restricted:
-            return true
-        case .unknown, .checking, .notRequested:
-            return false
-        }
-    }
-
     private func completeOnboarding() {
-        // This is the ONLY place where onboarding is marked complete.
-        // Therefore answering a system permission prompt can never navigate
-        // the user away from this screen by itself.
         hasCompletedOnboarding = true
     }
 
@@ -437,42 +370,6 @@ struct NearbyPermissionsOnboardingView: View {
         }
 
         switch nearbyPermissions.bluetoothPermission {
-        case .allowed:
-            return .allowed
-        case .denied:
-            return .denied
-        case .restricted:
-            return .restricted
-        case .checking:
-            return .requesting
-        case .notRequested:
-            return .waiting
-        case .unknown:
-            return .unknown
-        }
-    }
-
-    private var localNetworkDisplayState: PermissionDisplayState {
-        if setupStage == .requestingLocalNetwork {
-            return .requesting
-        }
-
-        // Before the setup reaches Local Network, keep the row visually waiting
-        // unless we already know the permission from a previous app run.
-        if setupStage == .idle || setupStage == .requestingBluetooth {
-            switch nearbyPermissions.localNetworkPermission {
-            case .allowed:
-                return .allowed
-            case .denied:
-                return .denied
-            case .restricted:
-                return .restricted
-            default:
-                return .waiting
-            }
-        }
-
-        switch nearbyPermissions.localNetworkPermission {
         case .allowed:
             return .allowed
         case .denied:

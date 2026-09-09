@@ -69,14 +69,6 @@ struct SettingsView: View {
                             isChecking: nearbyPermissions.bluetoothPermission == .checking
                         )
 
-                        NearbyPermissionRow(
-                            icon: "network",
-                            iconColor: .cyan,
-                            title: "Local Network",
-                            status: nearbyPermissions.localNetworkPermissionTitle,
-                            isAllowed: nearbyPermissions.localNetworkPermission == .allowed,
-                            isChecking: nearbyPermissions.localNetworkPermission == .checking
-                        )
 
                         if nearbyPermissions.bluetoothNeedsPowerAttention {
                             Label(
@@ -99,18 +91,6 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                         }
 
-                        if nearbyPermissions.localNetworkPermission == .unknown ||
-                            nearbyPermissions.localNetworkPermission == .notRequested {
-                            Button {
-                                nearbyPermissions.checkLocalNetworkAccess()
-                            } label: {
-                                NearbySettingsActionRow(
-                                    icon: "network.badge.shield.half.filled",
-                                    title: "Check Local Network Access"
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
 
                         if hasDeniedNearbyPermission {
                             Button {
@@ -127,7 +107,7 @@ struct SettingsView: View {
                         Text("Nearby Play")
                     } footer: {
                         Text(
-                            "Bluetooth and Local Network access are used to discover nearby players. The phones do not need to be connected to the same Wi-Fi network."
+                            "Nearby Play uses Bluetooth to discover and connect directly to nearby players. No internet connection or Wi-Fi network is required."
                         )
                     }
 
@@ -283,9 +263,7 @@ struct SettingsView: View {
 
     private var hasDeniedNearbyPermission: Bool {
         nearbyPermissions.bluetoothPermission == .denied ||
-        nearbyPermissions.bluetoothPermission == .restricted ||
-        nearbyPermissions.localNetworkPermission == .denied ||
-        nearbyPermissions.localNetworkPermission == .restricted
+        nearbyPermissions.bluetoothPermission == .restricted
     }
 
     // MARK: - Background

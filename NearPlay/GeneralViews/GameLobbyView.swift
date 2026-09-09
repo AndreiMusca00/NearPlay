@@ -85,24 +85,19 @@ struct GameLobbyView: View {
     }
 
     private var missingNearbyPermissionsMessage: String {
-        let bluetoothMissing =
-            nearbyPermissions.bluetoothPermission != .allowed
-        let localNetworkMissing =
-            nearbyPermissions.localNetworkPermission != .allowed
-
-        if bluetoothMissing && localNetworkMissing {
-            return "Nearby Play needs Bluetooth and Local Network access before it can search for players. Review these permissions in NearPlay Settings."
-        }
-
-        if bluetoothMissing {
+        if nearbyPermissions.bluetoothPermission != .allowed {
             return "Nearby Play needs Bluetooth access before it can search for players. Review this permission in NearPlay Settings."
         }
 
-        if localNetworkMissing {
-            return "Nearby Play needs Local Network access before it can search for players. Review this permission in NearPlay Settings."
+        if nearbyPermissions.bluetoothPower == .off {
+            return "Bluetooth is turned off. Turn Bluetooth on to discover and play with nearby players."
         }
 
-        return "Nearby Play permissions are ready."
+        if nearbyPermissions.bluetoothPower == .unsupported {
+            return "Bluetooth is unavailable on this device."
+        }
+
+        return "Nearby Play is ready."
     }
 
     private var hasConnectedOpponent: Bool {
@@ -287,7 +282,7 @@ struct GameLobbyView: View {
             updateNearbyPermissionGate()
         }
         .onChange(
-            of: nearbyPermissions.localNetworkPermission
+            of: nearbyPermissions.bluetoothPower
         ) { _, _ in
             updateNearbyPermissionGate()
         }
@@ -796,11 +791,8 @@ struct GameLobbyView: View {
 
         hasStartedCountdown = true
 
-        // TEST: keep Preparing visible for 2 seconds so the
-        // indeterminate progress animation can be inspected clearly.
-        // Change this back after testing if desired.
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 2.0
+            deadline: .now() + 0.45
         ) {
             guard hasConnectedOpponent,
                   let session = validLobbySession,
