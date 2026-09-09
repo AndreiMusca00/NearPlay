@@ -417,7 +417,7 @@ struct GamesListView: View {
 
         }
 
-        return "Hi, \\(trimmedName) 👋"
+        return "Hi, \(trimmedName) 👋"
 
     }
 
@@ -921,11 +921,11 @@ struct GamesListView: View {
 
             }
 
-            return "\\(game.minPlayers) players"
+            return "\(game.minPlayers) players"
 
         }
 
-        return "\\(game.minPlayers)–\\(game.maxPlayers) players"
+        return "\(game.minPlayers)–\(game.maxPlayers) players"
 
     }
 
