@@ -529,16 +529,20 @@ struct BackgammonView: View {
             deadline: .now() + 0.35
         ) {
             nearbyService.stop()
-            dismiss()
-            onExitToHome()
-            isQuitting = false
+            OrientationManager.shared.transition(to: .portrait) {
+                dismiss()
+                onExitToHome()
+                isQuitting = false
+            }
         }
     }
 
     private func handleOpponentQuit() {
         nearbyService.stop()
-        dismiss()
-        onExitToHome()
+        OrientationManager.shared.transition(to: .portrait) {
+            dismiss()
+            onExitToHome()
+        }
     }
 
     private var quittingOverlay: some View {

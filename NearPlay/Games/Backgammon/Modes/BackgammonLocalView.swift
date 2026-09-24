@@ -96,7 +96,7 @@ struct BackgammonLocalView: View {
             }
 
             if controller.state.isFinished && showResultOverlay {
-                SimpleGameResultOverlay(
+                LandscapeGameResultOverlay(
                     title: resultTitle,
                     subtitle: resultSubtitle,
                     symbolName: "crown.fill",
@@ -110,7 +110,7 @@ struct BackgammonLocalView: View {
                     firstPlayerColor: BackgammonTheme.purple,
                     secondPlayerColor: BackgammonTheme.cyan,
                     onPlayAgain: playAgain,
-                    onQuit: { dismiss() }
+                    onQuit: exitGame
                 )
                 .zIndex(10)
             }
@@ -120,7 +120,7 @@ struct BackgammonLocalView: View {
             isPresented: $showQuitConfirmation
         ) {
             Button("Quit Game", role: .destructive) {
-                dismiss()
+                exitGame()
             }
 
             Button("Cancel", role: .cancel) {}
@@ -180,6 +180,12 @@ struct BackgammonLocalView: View {
             OrientationManager.shared.lockToPortrait()
         }
 
+    }
+
+    private func exitGame() {
+        OrientationManager.shared.transition(to: .portrait) {
+            dismiss()
+        }
     }
 
     private var currentLegalMoves: [BackgammonMove] {

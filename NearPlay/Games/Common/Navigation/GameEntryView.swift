@@ -35,7 +35,13 @@ struct GameEntryView: View {
                     return
                 }
 
-                showLocal = true
+                if game.id == Game.backgammon.id {
+                    OrientationManager.shared.transition(to: [.landscapeLeft, .landscapeRight]) {
+                        showLocal = true
+                    }
+                } else {
+                    showLocal = true
+                }
             },
             onComputer: { difficulty in
                 guard game.supportedModes
@@ -44,7 +50,13 @@ struct GameEntryView: View {
                 }
 
                 selectedDifficulty = difficulty
-                showComputer = true
+                if game.id == Game.backgammon.id {
+                    OrientationManager.shared.transition(to: [.landscapeLeft, .landscapeRight]) {
+                        showComputer = true
+                    }
+                } else {
+                    showComputer = true
+                }
             }
         )
         .navigationDestination(
