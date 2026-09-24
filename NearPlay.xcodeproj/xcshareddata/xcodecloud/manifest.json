@@ -1,0 +1,9 @@
+{
+  "id" : "b340aded-3e13-483d-b93e-455736e05d40",
+  "targets" : [
+    {
+      "id" : "C783CD2D-252C-46A6-A3B0-3BC53D45725F",
+      "name" : "NearPlay"
+    }
+  ]
+}

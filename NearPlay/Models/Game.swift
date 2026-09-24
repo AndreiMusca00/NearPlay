@@ -140,9 +140,26 @@ extension Game {
             .computer
         ]
     )
+    
+    static let backgammon = Game(
+        id: "backgammon",
+        title: "Backgammon",
+        shortDescription: "Race your checkers home and bear them off before your opponent.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_backgammon",
+        fallbackSystemImage: "circle.grid.cross.fill",
+        accentHex: "#D9A35F",
+        supportedModes: [
+            .nearby,
+            .local,
+            .computer
+        ]
+    )
 
     static let all: [Game] = [
         ticTacToe,
+        backgammon,
         numberRush,
         battleship,
         connectFour

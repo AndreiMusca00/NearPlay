@@ -92,6 +92,11 @@ struct GameEntryView: View {
             BattleshipLocalView(
                 game: game
             )
+
+        case Game.backgammon.id:
+            BackgammonLocalView(
+                game: game
+            )
             
         default:
             unavailableDestination(
@@ -128,6 +133,13 @@ struct GameEntryView: View {
 
         case Game.battleship.id:
             BattleshipComputerView(
+                game: game,
+                difficulty:
+                    selectedDifficulty
+            )
+
+        case Game.backgammon.id:
+            BackgammonComputerView(
                 game: game,
                 difficulty:
                     selectedDifficulty

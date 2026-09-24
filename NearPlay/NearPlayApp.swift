@@ -9,6 +9,8 @@ import SwiftUI
 
 @main
 struct NearPlayApp: App {
+    @UIApplicationDelegateAdaptor(NearPlayOrientationAppDelegate.self)
+    private var orientationAppDelegate
     @StateObject private var purchaseManager = PurchaseManager()
     @StateObject private var nearbyPermissions = NearbyPermissionsManager()
     @StateObject private var appUpdateManager = AppUpdateManager()

@@ -908,25 +908,9 @@ struct GamesListView: View {
     // MARK: - Game Metadata
 
     private func playerText(
-
         for game: Game
-
     ) -> String {
-
-        if game.minPlayers == game.maxPlayers {
-
-            if game.minPlayers == 1 {
-
-                return "1 player"
-
-            }
-
-            return "\(game.minPlayers) players"
-
-        }
-
-        return "\(game.minPlayers)–\(game.maxPlayers) players"
-
+        game.playerCountText
     }
 
     // MARK: - Favorites
