@@ -15,6 +15,9 @@ struct BackgammonStartPayload: Codable, Equatable {
 enum BackgammonActionKind: String, Codable, Equatable {
     case roll
     case move
+    case combinedMove
+    case undo
+    case commit
 }
 
 struct BackgammonActionPayload: Codable, Equatable {
@@ -32,4 +35,17 @@ struct BackgammonStatePayload: Codable, Equatable {
     let sessionID: String
     let roundNumber: Int
     let state: BackgammonGameState
+    let canUndo: Bool?
+
+    init(
+        sessionID: String,
+        roundNumber: Int,
+        state: BackgammonGameState,
+        canUndo: Bool? = nil
+    ) {
+        self.sessionID = sessionID
+        self.roundNumber = roundNumber
+        self.state = state
+        self.canUndo = canUndo
+    }
 }

@@ -535,7 +535,7 @@ struct BackgammonLocalView: View {
     }
 }
 
-private struct BackgammonNoMovesNotice: View {
+struct BackgammonNoMovesNotice: View {
     let playerName: String
     let accent: Color
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

@@ -30,6 +30,12 @@ struct BackgammonView: View {
     @State private var showQuitConfirmation = false
     @State private var isQuitting = false
     @State private var showResultOverlay = false
+    @State private var noPossibleMovesTurnID: UUID?
+    @State private var isPresentingRoll = false
+    @State private var isAutoPlaying = false
+    @State private var automaticMove: BackgammonMove?
+    @State private var automaticMoveTask: Task<Void, Never>?
+    @State private var remoteCanUndo = false
 
     init(
         game: Game,
@@ -48,7 +54,8 @@ struct BackgammonView: View {
             wrappedValue: BackgammonMatchController(
                 playerOneID: startPayload.playerOneID,
                 playerTwoID: startPayload.playerTwoID,
-                initialState: startPayload.initialState
+                initialState: startPayload.initialState,
+                manualTurnCommit: true
             )
         )
 
@@ -68,7 +75,7 @@ struct BackgammonView: View {
 
     var body: some View {
         ZStack {
-            BackgammonGameScreen(
+            BackgammonLocalLandscapeScreen(
                 gameTitle: game.title,
                 state: controller.state,
                 playerOneID: startPayload.playerOneID,
@@ -77,9 +84,12 @@ struct BackgammonView: View {
                 playerTwoName: startPayload.playerTwoName,
                 selectedSource: selectedSource,
                 legalMoves: localLegalMoves,
+                moveOptions: localMoveOptions,
                 interactionPlayer: localPlayer,
                 isInteractionEnabled: canPlay,
-                showsProgress: pendingAction || awaitingRoundReset,
+                automaticMove: automaticMove,
+                onAutomaticMoveFinished: finishAutomaticMove,
+                onDiceSettled: diceDidSettle,
                 statusTitle: statusTitle,
                 statusSubtitle: statusSubtitle,
                 onRoll: rollDice,
@@ -87,16 +97,30 @@ struct BackgammonView: View {
                 onBarTap: selectBar,
                 onMove: { source, destination in
                     guard canPlay else { return }
-                    submitMove(
+                    submitCombinedMove(
                         source: source,
                         destination: destination
                     )
                 },
-                onBearOff: bearOff,
+                canUndo: canPlay && canUndoAvailable,
+                canReady: canPlay && canReady,
+                onUndo: submitUndo,
+                onReady: submitCommit,
                 onQuitRequested: {
                     showQuitConfirmation = true
                 }
             )
+
+            if noPossibleMovesTurnID != nil {
+                BackgammonNoMovesNotice(
+                    playerName: activePlayerName,
+                    accent: localPlayer == .playerOne
+                        ? BackgammonTheme.cyan : BackgammonTheme.purple
+                )
+                .id(noPossibleMovesTurnID)
+                .transition(.opacity)
+                .zIndex(9)
+            }
 
             if controller.state.isFinished && showResultOverlay {
                 GameResultOverlay(
@@ -153,6 +177,12 @@ struct BackgammonView: View {
             showResultOverlay = false
             selectedSource = nil
             pendingAction = false
+            noPossibleMovesTurnID = nil
+            isPresentingRoll = false
+            isAutoPlaying = false
+            automaticMove = nil
+            automaticMoveTask?.cancel()
+            remoteCanUndo = false
 
             let startingPlayerID = confirmedRound.isMultiple(of: 2)
                 ? startPayload.playerTwoID
@@ -195,10 +225,21 @@ struct BackgammonView: View {
                 showResultOverlay = true
             }
         }
+        .task(id: noPossibleMovesTurnID) {
+            guard let turnID = noPossibleMovesTurnID else { return }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled, controller.state.turnID == turnID,
+                  isLocalTurn, !controller.state.isFinished else { return }
+            submitCommit()
+            withAnimation(.easeOut(duration: 0.2)) {
+                noPossibleMovesTurnID = nil
+            }
+        }
         .onAppear {
             OrientationManager.shared.lockToLandscape()
         }
         .onDisappear {
+            automaticMoveTask?.cancel()
             OrientationManager.shared.lockToPortrait()
         }
 
@@ -214,6 +255,11 @@ struct BackgammonView: View {
         return controller.legalMoves(for: localPlayerID)
     }
 
+    private var localMoveOptions: [BackgammonMoveOption] {
+        guard canPlay else { return [] }
+        return controller.moveOptions(for: localPlayerID)
+    }
+
     private func rollDice() {
         guard canPlay,
               controller.state.dice.isEmpty else {
@@ -221,6 +267,7 @@ struct BackgammonView: View {
         }
 
         selectedSource = nil
+        isPresentingRoll = true
 
         let payload = BackgammonActionPayload(
             sessionID: startPayload.sessionID,
@@ -235,66 +282,17 @@ struct BackgammonView: View {
     }
 
     private func handlePointTap(_ index: Int) {
-        guard canPlay else {
-            return
-        }
-
-        if let selectedSource {
-            let sourceIndex: Int?
-
-            switch selectedSource {
-            case .bar:
-                sourceIndex = nil
-            case .point(let point):
-                sourceIndex = point
-            }
-
-            if localLegalMoves.contains(where: {
-                $0.source == sourceIndex &&
-                $0.destination == index
-            }) {
-                submitMove(
-                    source: sourceIndex,
-                    destination: index
-                )
-                return
-            }
-        }
-
-        guard localLegalMoves.contains(where: {
-            $0.source == index
-        }) else {
-            selectedSource = nil
-            return
-        }
-
-        selectedSource = .point(index)
-        UISelectionFeedbackGenerator().selectionChanged()
+        guard canPlay,
+              let move = localLegalMoves.filter({ $0.source == index })
+                .sorted(by: { $0.die > $1.die }).first else { return }
+        submitMove(source: move.source, destination: move.destination)
     }
 
     private func selectBar() {
         guard canPlay,
-              localLegalMoves.contains(where: {
-                  $0.source == nil
-              }) else {
-            return
-        }
-
-        selectedSource = .bar
-        UISelectionFeedbackGenerator().selectionChanged()
-    }
-
-    private func bearOff() {
-        guard canPlay,
-              case .point(let source)? = selectedSource,
-              localLegalMoves.contains(where: {
-                  $0.source == source &&
-                  $0.destination == nil
-              }) else {
-            return
-        }
-
-        submitMove(source: source, destination: nil)
+              let move = localLegalMoves.filter({ $0.source == nil })
+                .sorted(by: { $0.die > $1.die }).first else { return }
+        submitMove(source: move.source, destination: move.destination)
     }
 
     private func submitMove(
@@ -311,6 +309,35 @@ struct BackgammonView: View {
         )
 
         submitAction(payload)
+    }
+
+    private func submitCombinedMove(source: Int?, destination: Int?) {
+        guard localMoveOptions.contains(where: {
+            $0.source == source && $0.destination == destination
+        }) else { return }
+        submitAction(BackgammonActionPayload(
+            sessionID: startPayload.sessionID, playerID: localPlayerID,
+            turnID: controller.state.turnID, kind: .combinedMove,
+            source: source, destination: destination
+        ))
+    }
+
+    private func submitUndo() {
+        guard isLocalTurn, canUndoAvailable else { return }
+        submitAction(BackgammonActionPayload(
+            sessionID: startPayload.sessionID, playerID: localPlayerID,
+            turnID: controller.state.turnID, kind: .undo,
+            source: nil, destination: nil
+        ))
+    }
+
+    private func submitCommit() {
+        guard isLocalTurn else { return }
+        submitAction(BackgammonActionPayload(
+            sessionID: startPayload.sessionID, playerID: localPlayerID,
+            turnID: controller.state.turnID, kind: .commit,
+            source: nil, destination: nil
+        ))
     }
 
     private func submitAction(
@@ -330,6 +357,57 @@ struct BackgammonView: View {
                 type: .gameAction
             )
         }
+    }
+
+    private func diceDidSettle(_ turnID: UUID) {
+        guard isPresentingRoll, controller.state.turnID == turnID,
+              isLocalTurn else { return }
+        isPresentingRoll = false
+        if controller.legalMoves(for: localPlayerID).isEmpty {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
+                noPossibleMovesTurnID = turnID
+            }
+        } else {
+            continueAutomaticSequenceIfNeeded()
+        }
+    }
+
+    private func continueAutomaticSequenceIfNeeded() {
+        guard isLocalTurn, !pendingAction, !isPresentingRoll,
+              !controller.state.isFinished else {
+            if !isLocalTurn { isAutoPlaying = false }
+            return
+        }
+        if let move = controller.nextForcedMove(for: localPlayerID) {
+            scheduleAutomaticMove(move)
+        } else if isAutoPlaying && canReady {
+            automaticMoveTask?.cancel()
+            automaticMoveTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                guard !Task.isCancelled else { return }
+                submitCommit()
+                isAutoPlaying = false
+            }
+        } else {
+            isAutoPlaying = false
+        }
+    }
+
+    private func scheduleAutomaticMove(_ move: BackgammonMove) {
+        automaticMoveTask?.cancel()
+        isAutoPlaying = true
+        automaticMoveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled, isLocalTurn,
+                  !controller.state.isFinished else { return }
+            automaticMove = move
+        }
+    }
+
+    private func finishAutomaticMove(_ move: BackgammonMove) {
+        guard automaticMove == move, isLocalTurn else { return }
+        automaticMove = nil
+        submitMove(source: move.source, destination: move.destination)
     }
 
     private func resolveAction(
@@ -386,10 +464,35 @@ struct BackgammonView: View {
                         isLocalAction ? .success : .warning
                     )
             }
+
+        case .combinedMove:
+            guard let option = controller.moveOptions(for: payload.playerID)
+                .first(where: {
+                    $0.source == payload.source &&
+                    $0.destination == payload.destination
+                }) else {
+                pendingAction = false
+                return
+            }
+            _ = controller.play(
+                option: option,
+                by: payload.playerID,
+                turnID: payload.turnID
+            )
+
+        case .undo:
+            _ = controller.undoLastMove()
+
+        case .commit:
+            _ = controller.commitTurn(
+                by: payload.playerID,
+                turnID: payload.turnID
+            )
         }
 
         pendingAction = false
         broadcastAuthoritativeState()
+        continueAutomaticSequenceIfNeeded()
     }
 
     private func broadcastAuthoritativeState() {
@@ -401,7 +504,8 @@ struct BackgammonView: View {
             BackgammonStatePayload(
                 sessionID: startPayload.sessionID,
                 roundNumber: currentRoundNumber,
-                state: controller.state
+                state: controller.state,
+                canUndo: controller.canUndo
             ),
             type: .gameState
         )
@@ -409,7 +513,8 @@ struct BackgammonView: View {
 
     private func applyRemoteState(
         _ newState: BackgammonGameState,
-        roundNumber: Int
+        roundNumber: Int,
+        canUndo: Bool
     ) {
         guard roundNumber >= currentRoundNumber else {
             return
@@ -417,9 +522,11 @@ struct BackgammonView: View {
 
         currentRoundNumber = roundNumber
         controller.applyRemoteState(newState)
+        remoteCanUndo = canUndo
         selectedSource = nil
         pendingAction = false
         awaitingRoundReset = false
+        continueAutomaticSequenceIfNeeded()
     }
 
     // MARK: - Messages
@@ -465,7 +572,8 @@ struct BackgammonView: View {
 
             applyRemoteState(
                 payload.state,
-                roundNumber: payload.roundNumber
+                roundNumber: payload.roundNumber,
+                canUndo: payload.canUndo ?? false
             )
 
         case .gameQuit:
@@ -604,7 +712,25 @@ struct BackgammonView: View {
         isLocalTurn &&
         !controller.state.isFinished &&
         !pendingAction &&
-        !awaitingRoundReset
+        !awaitingRoundReset &&
+        !isPresentingRoll &&
+        !isAutoPlaying &&
+        noPossibleMovesTurnID == nil
+    }
+
+    private var canReady: Bool {
+        controller.canCommitTurn(
+            for: localPlayerID,
+            turnID: controller.state.turnID
+        )
+    }
+
+    private var canUndoAvailable: Bool {
+        isLocalHost ? controller.canUndo : remoteCanUndo
+    }
+
+    private var activePlayerName: String {
+        isLocalTurn ? localPlayerName : opponentName
     }
 
     private var statusTitle: String {
@@ -621,9 +747,8 @@ struct BackgammonView: View {
         }
 
         if isLocalTurn {
-            return controller.state.dice.isEmpty
-                ? "Roll the dice"
-                : "Make your move"
+            if controller.state.dice.isEmpty { return "\(localPlayerName), roll the dice" }
+            return canReady ? "\(localPlayerName), ready?" : "\(localPlayerName), make your move"
         }
 
         return "Waiting for \(opponentName)"
@@ -640,7 +765,12 @@ struct BackgammonView: View {
             return "Re-enter your checker from the bar first."
         }
 
-        return "Moves are validated by the NearPlay host."
+        if isLocalTurn && canReady {
+            return "Tap Ready to finish the turn. You can still Undo first."
+        }
+        return isLocalTurn
+            ? "Tap for one die, or drag to a combined destination."
+            : "Moves are synchronized by the NearPlay host."
     }
 
     private var localRoundResult: GameRoundResult {
