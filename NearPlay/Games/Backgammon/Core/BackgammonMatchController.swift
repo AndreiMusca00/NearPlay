@@ -203,6 +203,18 @@ final class BackgammonMatchController: ObservableObject {
     }
 
     @discardableResult
+    func resign(by playerID: String) -> Bool {
+        guard game.resign(by: playerID) else {
+            return false
+        }
+
+        state = game.state
+        clearMoveHistory()
+        animationID = UUID()
+        return true
+    }
+
+    @discardableResult
     func commitTurn(
         by playerID: String,
         turnID: UUID

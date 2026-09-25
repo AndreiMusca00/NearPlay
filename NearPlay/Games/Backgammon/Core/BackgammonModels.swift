@@ -69,6 +69,7 @@ struct BackgammonGameState: Codable, Equatable, Sendable {
 
     var lastMove: BackgammonMove?
     var winnerPlayerID: String?
+    var resignedPlayerID: String?
 
     var isFinished: Bool {
         winnerPlayerID != nil
@@ -78,15 +79,28 @@ struct BackgammonGameState: Codable, Equatable, Sendable {
         !dice.isEmpty
     }
 
-    /// Doubles use two visual passes: shade each die, then restore each die.
-    /// Derived from remaining dice so Undo and multi-die moves stay in sync.
+    /// After the two extra double moves are consumed, the visible dice behave
+    /// like a normal pair and shade one at a time.
     func isDieShaded(at index: Int) -> Bool {
         guard dice.count == 2, dice.indices.contains(index) else { return false }
         if dice[0] == dice[1] {
             let used = max(0, min(4, 4 - remainingDice.count))
-            return used > index && used < index + 3
+            return max(0, used - 2) > index
         }
         return !remainingDice.contains(dice[index])
+    }
+
+    /// The aura represents the extra pair granted by a double. Each of the
+    /// first two moves consumes one aura; Undo restores it automatically.
+    func hasDoubleAura(at index: Int) -> Bool {
+        guard dice.count == 2,
+              dice[0] == dice[1],
+              dice.indices.contains(index) else {
+            return false
+        }
+
+        let used = max(0, min(4, 4 - remainingDice.count))
+        return used <= index
     }
 
     func barCount(for player: BackgammonPlayer) -> Int {

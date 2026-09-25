@@ -45,6 +45,7 @@ struct BackgammonLocalLandscapeScreen: View {
     let onReady: () -> Void
 
     let onQuitRequested: () -> Void
+    let onResignRequested: () -> Void
 
     var body: some View {
         GeometryReader { geometry in
@@ -52,8 +53,9 @@ struct BackgammonLocalLandscapeScreen: View {
             let insets = geometry.safeAreaInsets
             let fullWidth = geometry.size.width + insets.leading + insets.trailing
             let fullHeight = geometry.size.height + insets.top + insets.bottom
-            let boardWidth = max(1, fullWidth - 2 * (max(insets.leading, insets.trailing) + 3))
-            let boardHeight = max(1, fullHeight - 2 * (max(insets.top, insets.bottom) + 3))
+            let outerPadding: CGFloat = 12
+            let boardWidth = max(1, fullWidth - 2 * (max(insets.leading, insets.trailing) + outerPadding))
+            let boardHeight = max(1, fullHeight - 2 * (max(insets.top, insets.bottom) + outerPadding))
 
             ZStack {
                 BackgammonTheme.background
@@ -94,6 +96,23 @@ struct BackgammonLocalLandscapeScreen: View {
         width: CGFloat,
         height: CGFloat
     ) -> some View {
+        let actionRailWidth: CGFloat = 48
+        let boardSpacing: CGFloat = 10
+        let gameBoardWidth = max(1, width - actionRailWidth - boardSpacing)
+
+        return HStack(spacing: boardSpacing) {
+            sideActions
+                .frame(width: actionRailWidth, height: height)
+
+            gameBoard(width: gameBoardWidth, height: height)
+        }
+        .frame(
+            width: width,
+            height: height
+        )
+    }
+
+    private func gameBoard(width: CGFloat, height: CGFloat) -> some View {
         ZStack {
             BackgammonLocalBoardView(
                 state: state,
@@ -113,48 +132,70 @@ struct BackgammonLocalLandscapeScreen: View {
                 onBarTap: onBarTap,
                 onMove: onMove
             )
-            .frame(
-                width: width,
-                height: height
-            )
+            .frame(width: width, height: height)
 
-            tableDiceLayer(
-                width: width,
-                height: height
-            )
-            .zIndex(20)
+            tableDiceLayer(width: width, height: height)
+                .zIndex(20)
 
             centerControls
                 .zIndex(30)
-
-            Button(action: onQuitRequested) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color(red: 1, green: 0.91, blue: 0.73))
-                    .frame(width: 36, height: 36)
-                    .background {
-                        Circle().fill(LinearGradient(
-                            colors: [Color(red: 0.32, green: 0.22, blue: 0.16), .black.opacity(0.85)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        ))
-                    }
-                    .overlay {
-                        Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1)
-                    }
-                    .shadow(color: .black.opacity(0.4), radius: 3, y: 2)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Quit game")
-            .position(x: 30, y: 28)
-            .zIndex(30)
-
         }
-        .frame(
-            width: width,
-            height: height
-        )
+        .frame(width: width, height: height)
+    }
+
+    private var sideActions: some View {
+        VStack(spacing: 10) {
+            actionButton(
+                systemName: "xmark",
+                foregroundColor: Color(red: 1, green: 0.91, blue: 0.73),
+                gradientColors: [Color(red: 0.32, green: 0.22, blue: 0.16), .black.opacity(0.85)],
+                accessibilityLabel: "Quit game",
+                action: onQuitRequested
+            )
+
+            if !state.isFinished {
+                actionButton(
+                    systemName: "flag.fill",
+                    foregroundColor: Color(red: 1, green: 0.82, blue: 0.72),
+                    gradientColors: [Color(red: 0.46, green: 0.16, blue: 0.13), .black.opacity(0.88)],
+                    accessibilityLabel: "Resign game",
+                    action: onResignRequested
+                )
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 2)
+    }
+
+    private func actionButton(
+        systemName: String,
+        foregroundColor: Color,
+        gradientColors: [Color],
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(foregroundColor)
+                .frame(width: 36, height: 36)
+                .background {
+                    Circle().fill(LinearGradient(
+                        colors: gradientColors,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                }
+                .overlay {
+                    Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.4), radius: 3, y: 2)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var centerControls: some View {
@@ -240,10 +281,12 @@ struct BackgammonLocalLandscapeScreen: View {
 
                 BackgammonIvoryDie(
                     value: value,
-                    isShaded: diceAreDocked && state.isDieShaded(at: index)
+                    isShaded: diceAreDocked && state.isDieShaded(at: index),
+                    showsDoubleAura:
+                        diceAreDocked && state.hasDoubleAura(at: index)
                 )
                 .scaleEffect(
-                    diceAreVisible ? 1 : 0.58
+                    diceAreVisible ? (diceAreDocked ? 0.9 : 1) : 0.58
                 )
                 .rotationEffect(
                     .degrees(
@@ -439,6 +482,7 @@ private struct BackgammonIvoryDie: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let value: Int
     var isShaded = false
+    var showsDoubleAura = false
 
     private var pipSlots: [Int] {
         switch value {
@@ -490,10 +534,35 @@ private struct BackgammonIvoryDie: View {
                 .fill(Color.black.opacity(isShaded ? 0.64 : 0))
                 .allowsHitTesting(false)
         }
+        .overlay {
+            if showsDoubleAura {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 1, green: 0.88, blue: 0.45),
+                                Color(red: 0.96, green: 0.53, blue: 0.16)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2.2
+                    )
+                    .padding(-3)
+                    .shadow(
+                        color: Color(red: 1, green: 0.66, blue: 0.20).opacity(0.9),
+                        radius: 8
+                    )
+                    .allowsHitTesting(false)
+            }
+        }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isShaded)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.24), value: showsDoubleAura)
         .shadow(color: .black.opacity(0.4), radius: 4, x: 1, y: 5)
         .accessibilityLabel("Die, \(value)")
-        .accessibilityValue(isShaded ? "Shaded" : "Ivory")
+        .accessibilityValue(
+            showsDoubleAura ? "Double bonus" : (isShaded ? "Used" : "Available")
+        )
     }
 }
 

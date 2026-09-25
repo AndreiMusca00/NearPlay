@@ -18,6 +18,7 @@ struct BackgammonLocalView: View {
     @State private var sessionScore = GameSessionScore()
     @State private var showResultOverlay = false
     @State private var showQuitConfirmation = false
+    @State private var showResignConfirmation = false
     @State private var noPossibleMovesTurnID: UUID?
     @State private var isPresentingRoll = false
     @State private var isAutoPlaying = false
@@ -57,6 +58,7 @@ struct BackgammonLocalView: View {
                 playerOneName: "Guest",
                 playerTwoID: Self.localPlayerID,
                 playerTwoName: localPlayerDisplayName,
+                boardPerspective: .localPlayer(.playerTwo),
                 selectedSource: selectedSource,
                 legalMoves: currentLegalMoves,
                 moveOptions: currentMoveOptions,
@@ -82,6 +84,9 @@ struct BackgammonLocalView: View {
                 onReady: commitTurn,
                 onQuitRequested: {
                     showQuitConfirmation = true
+                },
+                onResignRequested: {
+                    showResignConfirmation = true
                 }
             )
 
@@ -126,6 +131,18 @@ struct BackgammonLocalView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The current local round will be discarded.")
+        }
+        .alert(
+            "Resign this round?",
+            isPresented: $showResignConfirmation
+        ) {
+            Button("Resign", role: .destructive) {
+                resignActivePlayer()
+            }
+
+            Button("Keep Playing", role: .cancel) {}
+        } message: {
+            Text("The other player will win this round.")
         }
         .task(id: controller.state.isFinished) {
             showResultOverlay = false
@@ -439,6 +456,19 @@ struct BackgammonLocalView: View {
             .impactOccurred()
     }
 
+    private func resignActivePlayer() {
+        automaticMoveTask?.cancel()
+        automaticMove = nil
+        isAutoPlaying = false
+        isPresentingRoll = false
+        noPossibleMovesTurnID = nil
+        selectedSource = nil
+
+        _ = controller.resign(
+            by: controller.state.activePlayerID
+        )
+    }
+
     private func recordFinishedRound() {
         let outcome: GameSessionRoundOutcome =
             controller.state.winnerPlayerID == Self.localPlayerID
@@ -523,7 +553,13 @@ struct BackgammonLocalView: View {
     }
 
     private var resultSubtitle: String {
-        controller.state.winnerPlayerID == Self.localPlayerID
+        if let resignedPlayerID = controller.state.resignedPlayerID {
+            return resignedPlayerID == Self.localPlayerID
+                ? "You resigned this round."
+                : "Guest resigned this round."
+        }
+
+        return controller.state.winnerPlayerID == Self.localPlayerID
             ? "You bore off all 15 checkers first."
             : "Guest bore off all 15 checkers first."
     }

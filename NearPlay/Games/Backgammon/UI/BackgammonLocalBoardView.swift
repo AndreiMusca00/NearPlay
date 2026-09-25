@@ -271,7 +271,7 @@ struct BackgammonLocalBoardView: View {
             do { try await Task.sleep(nanoseconds: 30_000_000) }
             catch { return }
             guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: reduceMotion ? 0.2 : 0.65), completionCriteria: .removed) {
+            withAnimation(.easeInOut(duration: reduceMotion ? 0.2 : 0.52), completionCriteria: .removed) {
                 automaticMoveProgress = 1
             } completion: {
                 onAutomaticMoveFinished(move)

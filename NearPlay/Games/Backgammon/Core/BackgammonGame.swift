@@ -58,7 +58,8 @@ struct BackgammonGame: Sendable {
             dice: [],
             remainingDice: [],
             lastMove: nil,
-            winnerPlayerID: nil
+            winnerPlayerID: nil,
+            resignedPlayerID: nil
         )
     }
 
@@ -90,6 +91,21 @@ struct BackgammonGame: Sendable {
 
     func playerID(for player: BackgammonPlayer) -> String {
         player == .playerOne ? playerOneID : playerTwoID
+    }
+
+    @discardableResult
+    mutating func resign(by playerID: String) -> Bool {
+        guard !state.isFinished,
+              let player = player(for: playerID) else {
+            return false
+        }
+
+        state.winnerPlayerID = self.playerID(for: player.opponent)
+        state.resignedPlayerID = playerID
+        state.dice = []
+        state.remainingDice = []
+        state.lastMove = nil
+        return true
     }
 
     func legalMoves(

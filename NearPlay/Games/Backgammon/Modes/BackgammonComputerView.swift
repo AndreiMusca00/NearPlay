@@ -13,6 +13,7 @@ struct BackgammonComputerView: View {
     @State private var sessionScore = GameSessionScore()
     @State private var showResultOverlay = false
     @State private var showQuitConfirmation = false
+    @State private var showResignConfirmation = false
     @State private var noPossibleMovesTurnID: UUID?
     @State private var isPresentingRoll = false
     @State private var isAutoPlaying = false
@@ -53,7 +54,8 @@ struct BackgammonComputerView: View {
                 canUndo: canHumanInteract && controller.canUndo,
                 canReady: canHumanInteract && canReady,
                 onUndo: undoMove, onReady: commitHumanTurn,
-                onQuitRequested: { showQuitConfirmation = true }
+                onQuitRequested: { showQuitConfirmation = true },
+                onResignRequested: { showResignConfirmation = true }
             )
 
             if noPossibleMovesTurnID != nil {
@@ -87,6 +89,12 @@ struct BackgammonComputerView: View {
             Button("Quit Game", role: .destructive, action: exitGame)
             Button("Cancel", role: .cancel) {}
         } message: { Text("The current round will be discarded.") }
+        .alert("Resign this round?", isPresented: $showResignConfirmation) {
+            Button("Resign", role: .destructive, action: resignGame)
+            Button("Keep Playing", role: .cancel) {}
+        } message: {
+            Text("The computer will win this round.")
+        }
         .task(id: controller.state.turnID) { await startComputerTurnIfNeeded() }
         .task(id: noPossibleMovesTurnID) { await passBlockedTurnIfNeeded() }
         .task(id: controller.state.isFinished) { showResultIfNeeded() }
@@ -286,6 +294,16 @@ struct BackgammonComputerView: View {
         selectedSource = nil
     }
 
+    private func resignGame() {
+        automaticMoveTask?.cancel()
+        automaticMove = nil
+        isAutoPlaying = false
+        isPresentingRoll = false
+        noPossibleMovesTurnID = nil
+        selectedSource = nil
+        _ = controller.resign(by: Self.humanID)
+    }
+
     private func playAgain() {
         roundNumber += 1
         showResultOverlay = false
@@ -326,7 +344,11 @@ struct BackgammonComputerView: View {
         controller.state.winnerPlayerID == Self.humanID ? "You Win!" : "Computer Wins"
     }
     private var resultSubtitle: String {
-        controller.state.winnerPlayerID == Self.humanID
+        if controller.state.resignedPlayerID == Self.humanID {
+            return "You resigned this round."
+        }
+
+        return controller.state.winnerPlayerID == Self.humanID
             ? "You bore off all 15 checkers first."
             : "The computer bore off all 15 checkers first."
     }

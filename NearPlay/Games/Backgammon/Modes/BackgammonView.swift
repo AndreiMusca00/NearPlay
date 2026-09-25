@@ -28,6 +28,7 @@ struct BackgammonView: View {
     @State private var scoreRoundNumber = 1
 
     @State private var showQuitConfirmation = false
+    @State private var showResignConfirmation = false
     @State private var isQuitting = false
     @State private var showResultOverlay = false
     @State private var noPossibleMovesTurnID: UUID?
@@ -111,6 +112,9 @@ struct BackgammonView: View {
                 onReady: submitCommit,
                 onQuitRequested: {
                     showQuitConfirmation = true
+                },
+                onResignRequested: {
+                    showResignConfirmation = true
                 }
             )
 
@@ -162,6 +166,18 @@ struct BackgammonView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You and your opponent will return to the main screen.")
+        }
+        .alert(
+            "Resign this round?",
+            isPresented: $showResignConfirmation
+        ) {
+            Button("Resign", role: .destructive) {
+                submitResign()
+            }
+
+            Button("Keep Playing", role: .cancel) {}
+        } message: {
+            Text("Your opponent will win this round.")
         }
         .onReceive(
             nearbyService.$lastReceivedMessage
@@ -343,6 +359,30 @@ struct BackgammonView: View {
         ))
     }
 
+    private func submitResign() {
+        guard !controller.state.isFinished else {
+            return
+        }
+
+        automaticMoveTask?.cancel()
+        automaticMove = nil
+        isAutoPlaying = false
+        isPresentingRoll = false
+        noPossibleMovesTurnID = nil
+
+        submitAction(
+            BackgammonActionPayload(
+                sessionID: startPayload.sessionID,
+                playerID: localPlayerID,
+                turnID: controller.state.turnID,
+                kind: .resign,
+                source: nil,
+                destination: nil,
+                roundNumber: currentRoundNumber
+            )
+        )
+    }
+
     private func submitAction(
         _ payload: BackgammonActionPayload
     ) {
@@ -418,8 +458,29 @@ struct BackgammonView: View {
         isLocalAction: Bool
     ) {
         guard isLocalHost,
-              payload.sessionID == startPayload.sessionID,
-              payload.turnID == controller.state.turnID,
+              payload.sessionID == startPayload.sessionID else {
+            pendingAction = false
+            return
+        }
+
+        if payload.kind == .resign {
+            let expectedPlayerID = isLocalAction
+                ? localPlayerID
+                : opponentID
+
+            guard payload.playerID == expectedPlayerID,
+                  payload.roundNumber == currentRoundNumber else {
+                pendingAction = false
+                return
+            }
+
+            _ = controller.resign(by: payload.playerID)
+            pendingAction = false
+            broadcastAuthoritativeState()
+            return
+        }
+
+        guard payload.turnID == controller.state.turnID,
               payload.playerID == controller.state.activePlayerID else {
             pendingAction = false
             return
@@ -491,6 +552,9 @@ struct BackgammonView: View {
                 by: payload.playerID,
                 turnID: payload.turnID
             )
+
+        case .resign:
+            break
         }
 
         pendingAction = false
@@ -789,7 +853,13 @@ struct BackgammonView: View {
     }
 
     private var resultSubtitle: String {
-        localRoundResult == .win
+        if let resignedPlayerID = controller.state.resignedPlayerID {
+            return resignedPlayerID == localPlayerID
+                ? "You resigned this round."
+                : "\(opponentName) resigned this round."
+        }
+
+        return localRoundResult == .win
             ? "You bore off all 15 checkers first."
             : "\(opponentName) bore off all 15 checkers first."
     }

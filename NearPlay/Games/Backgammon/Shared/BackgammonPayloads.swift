@@ -18,6 +18,7 @@ enum BackgammonActionKind: String, Codable, Equatable {
     case combinedMove
     case undo
     case commit
+    case resign
 }
 
 struct BackgammonActionPayload: Codable, Equatable {
@@ -29,6 +30,25 @@ struct BackgammonActionPayload: Codable, Equatable {
     /// nil source means bar; nil destination means bear off.
     let source: Int?
     let destination: Int?
+    let roundNumber: Int?
+
+    init(
+        sessionID: String,
+        playerID: String,
+        turnID: UUID,
+        kind: BackgammonActionKind,
+        source: Int?,
+        destination: Int?,
+        roundNumber: Int? = nil
+    ) {
+        self.sessionID = sessionID
+        self.playerID = playerID
+        self.turnID = turnID
+        self.kind = kind
+        self.source = source
+        self.destination = destination
+        self.roundNumber = roundNumber
+    }
 }
 
 struct BackgammonStatePayload: Codable, Equatable {
