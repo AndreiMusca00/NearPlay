@@ -5,6 +5,7 @@ import Combine
 ///
 /// This class owns application/lobby state only. It does not know whether the
 /// underlying connection is MultipeerConnectivity, Bluetooth, Wi-Fi, etc.
+@MainActor
 final class NearbyService: ObservableObject {
     @Published var connectionState: NearbyConnectionState = .idle
     @Published var discoveredPeers: [NearbyPeer] = []
@@ -36,11 +37,12 @@ final class NearbyService: ObservableObject {
     private var incomingInvitationExpiryWorkItem: DispatchWorkItem?
     private var outgoingInvitationExpiryWorkItem: DispatchWorkItem?
     private var invitationFeedbackExpiryWorkItem: DispatchWorkItem?
+    private var nextSessionGeneration: UInt64 = 0
 
     init(
-        transport: NearbyTransport = BluetoothTransport()
+        transport: NearbyTransport? = nil
     ) {
-        self.transport = transport
+        self.transport = transport ?? BluetoothTransport()
         self.transport.delegate = self
     }
 
@@ -70,10 +72,8 @@ final class NearbyService: ObservableObject {
 
         transport.start(configuration: configuration)
 
-        publishOnMain {
-            self.connectionState = .searching
-            self.errorMessage = nil
-        }
+        connectionState = .searching
+        errorMessage = nil
     }
 
     func stop() {
@@ -91,18 +91,16 @@ final class NearbyService: ObservableObject {
         currentPlayerName = nil
         currentMaxPlayers = 2
 
-        publishOnMain {
-            self.connectionState = .idle
-            self.discoveredPeers.removeAll()
-            self.connectedPeers.removeAll()
-            self.pendingInvitation = nil
-            self.outgoingInvitation = nil
-            self.connectingPeer = nil
-            self.invitationFeedback = nil
-            self.lobbySession = nil
-            self.lastReceivedMessage = nil
-            self.errorMessage = nil
-        }
+        connectionState = .idle
+        discoveredPeers.removeAll()
+        connectedPeers.removeAll()
+        pendingInvitation = nil
+        outgoingInvitation = nil
+        connectingPeer = nil
+        invitationFeedback = nil
+        lobbySession = nil
+        lastReceivedMessage = nil
+        errorMessage = nil
     }
 
     /// Kept for the future reconnect implementation.
@@ -113,15 +111,11 @@ final class NearbyService: ObservableObject {
             return
         }
 
-        publishOnMain {
-            self.lobbySession = context
-        }
+        lobbySession = context
     }
 
     func clearLobbySession() {
-        publishOnMain {
-            self.lobbySession = nil
-        }
+        lobbySession = nil
     }
 
     // MARK: - Invite flow
@@ -139,16 +133,19 @@ final class NearbyService: ObservableObject {
 
         guard let currentGameID,
               let currentPlayerName else {
-            publishOnMain {
-                self.errorMessage =
-                    "Nearby service is not ready."
-            }
+            errorMessage = "Nearby service is not ready."
             return
+        }
+
+        nextSessionGeneration &+= 1
+        if nextSessionGeneration == 0 {
+            nextSessionGeneration = 1
         }
 
         let context = InvitationContext(
             kind: .request,
             sessionID: UUID().uuidString,
+            generation: nextSessionGeneration,
             gameID: currentGameID,
             inviterPlayerID: localPlayerID,
             inviterPlayerName: currentPlayerName,
@@ -167,10 +164,19 @@ final class NearbyService: ObservableObject {
 
         let sessionContext = LobbySessionContext(
             sessionID: context.sessionID,
+            generation: context.generation,
             gameID: context.gameID,
             hostPlayerID: context.inviterPlayerID,
             guestPlayerID: peer.id
         )
+
+        // Publish the attempt before entering CoreBluetooth. Some failures can
+        // be reported synchronously and must not be overwritten by `.inviting`.
+        outgoingInvitation = outgoing
+        connectingPeer = peer
+        lobbySession = sessionContext
+        connectionState = .inviting
+        errorMessage = nil
 
         transport.invite(
             peer,
@@ -178,25 +184,14 @@ final class NearbyService: ObservableObject {
             timeout: invitationDuration
         )
 
-        publishOnMain {
-            self.outgoingInvitation = outgoing
-            self.connectingPeer = peer
-            self.lobbySession = sessionContext
-            self.connectionState = .inviting
-            self.errorMessage = nil
-        }
-
         scheduleOutgoingInvitationExpiry(
-            sessionID: context.sessionID
+            session: context.sessionToken
         )
     }
 
     func acceptInvitation() {
         guard let invitation = pendingInvitation else {
-            publishOnMain {
-                self.errorMessage =
-                    "No invitation to accept."
-            }
+            errorMessage = "No invitation to accept."
             return
         }
 
@@ -205,19 +200,18 @@ final class NearbyService: ObservableObject {
 
         let sessionContext = LobbySessionContext(
             sessionID: invitation.context.sessionID,
+            generation: invitation.context.generation,
             gameID: invitation.context.gameID,
             hostPlayerID:
                 invitation.context.inviterPlayerID,
             guestPlayerID: localPlayerID
         )
 
-        publishOnMain {
-            self.pendingInvitation = nil
-            self.connectingPeer = invitation.fromPeer
-            self.lobbySession = sessionContext
-            self.connectionState = .connecting
-            self.errorMessage = nil
-        }
+        pendingInvitation = nil
+        connectingPeer = invitation.fromPeer
+        lobbySession = sessionContext
+        connectionState = .connecting
+        errorMessage = nil
 
         transport.acceptInvitation(
             sessionID: invitation.context.sessionID
@@ -251,13 +245,11 @@ final class NearbyService: ObservableObject {
             sendDeclineResponse: sendsDeclineResponse
         )
 
-        publishOnMain {
-            self.pendingInvitation = nil
-            self.connectingPeer = nil
+        pendingInvitation = nil
+        connectingPeer = nil
 
-            if self.connectedPeers.isEmpty {
-                self.connectionState = .searching
-            }
+        if connectedPeers.isEmpty {
+            connectionState = .searching
         }
     }
 
@@ -305,14 +297,14 @@ final class NearbyService: ObservableObject {
     }
 
     private func scheduleOutgoingInvitationExpiry(
-        sessionID: String
+        session: NearbySessionToken
     ) {
         outgoingInvitationExpiryWorkItem?.cancel()
 
         let workItem = DispatchWorkItem { [weak self] in
             guard let self,
                   let outgoing = self.outgoingInvitation,
-                  outgoing.context.sessionID == sessionID else {
+                  outgoing.context.sessionToken == session else {
                 return
             }
 
@@ -393,19 +385,13 @@ final class NearbyService: ObservableObject {
         connectingPeer = nil
     }
 
-    // MARK: - Helpers
-
-    private func publishOnMain(
-        _ block: @escaping () -> Void
-    ) {
-        if Thread.isMainThread {
-            block()
-        } else {
-            DispatchQueue.main.async {
-                block()
-            }
-        }
+    /// All service entry points and transport callbacks are main-actor isolated.
+    /// Keeping this helper avoids noisy UI diff churn while making execution
+    /// synchronous and deterministic.
+    private func publishOnMain(_ block: () -> Void) {
+        block()
     }
+
 }
 
 // MARK: - NearbyTransportDelegate
@@ -437,6 +423,13 @@ extension NearbyService: NearbyTransportDelegate {
             }
 
             self.discoveredPeers.append(peer)
+
+            if self.connectedPeers.isEmpty,
+               self.pendingInvitation == nil,
+               self.outgoingInvitation == nil {
+                self.connectionState = .searching
+                self.errorMessage = nil
+            }
         }
     }
 
@@ -459,6 +452,8 @@ extension NearbyService: NearbyTransportDelegate {
         publishOnMain {
             guard context.gameID == self.currentGameID,
                   context.kind == .request,
+                  context.generation > 0,
+                  peer.id == context.inviterPlayerID,
                   context.inviterPlayerID != self.localPlayerID else {
                 transport.rejectInvitation(
                     sessionID: context.sessionID,
@@ -468,11 +463,19 @@ extension NearbyService: NearbyTransportDelegate {
             }
 
             guard self.connectedPeers.isEmpty,
-                  self.pendingInvitation == nil else {
+                  self.lobbySession?.sessionToken == nil ||
+                    self.lobbySession?.sessionToken == context.sessionToken,
+                  self.pendingInvitation == nil ||
+                    self.pendingInvitation?.context.sessionToken == context.sessionToken else {
                 transport.rejectInvitation(
                     sessionID: context.sessionID,
                     sendDeclineResponse: false
                 )
+                return
+            }
+
+            // Replayed delivery of the same invitation is idempotent.
+            if self.pendingInvitation?.context.sessionToken == context.sessionToken {
                 return
             }
 
@@ -574,10 +577,59 @@ extension NearbyService: NearbyTransportDelegate {
 
     func nearbyTransport(
         _ transport: NearbyTransport,
-        peer: NearbyPeer,
-        didChange state: NearbyTransportPeerState
+        didCancelInvitation context: InvitationContext,
+        with peer: NearbyPeer?,
+        reason: NearbyTransportInvitationCancellationReason
     ) {
         publishOnMain {
+            let session = context.sessionToken
+            let matchesOutgoing =
+                self.outgoingInvitation?.context.sessionToken == session
+            let matchesIncoming =
+                self.pendingInvitation?.context.sessionToken == session
+            let matchesConnectingSession =
+                self.connectedPeers.isEmpty &&
+                self.lobbySession?.sessionToken == session
+
+            guard matchesOutgoing || matchesIncoming ||
+                    matchesConnectingSession else {
+                return
+            }
+
+            self.incomingInvitationExpiryWorkItem?.cancel()
+            self.outgoingInvitationExpiryWorkItem?.cancel()
+            self.incomingInvitationExpiryWorkItem = nil
+            self.outgoingInvitationExpiryWorkItem = nil
+            self.pendingInvitation = nil
+            self.outgoingInvitation = nil
+            self.connectingPeer = nil
+            self.lobbySession = nil
+
+            if self.connectedPeers.isEmpty {
+                self.connectionState = .searching
+            }
+
+#if DEBUG
+            let peerID = peer?.id ?? "unknown"
+            print("[NearbyService] Invitation \(session.sessionID)#\(session.generation) cancelled: \(reason.rawValue), peer=\(peerID)")
+#endif
+        }
+    }
+
+    func nearbyTransport(
+        _ transport: NearbyTransport,
+        peer: NearbyPeer,
+        didChange state: NearbyTransportPeerState,
+        session: NearbySessionToken
+    ) {
+        publishOnMain {
+            guard self.lobbySession?.sessionToken == session else {
+#if DEBUG
+                print("[NearbyService] Ignored stale peer state \(state) for \(session.sessionID)#\(session.generation)")
+#endif
+                return
+            }
+
             switch state {
             case .connected:
                 self.discoveredPeers.removeAll {
@@ -601,6 +653,7 @@ extension NearbyService: NearbyTransportDelegate {
                        session.guestPlayerID != peer.id {
                         self.lobbySession = LobbySessionContext(
                             sessionID: session.sessionID,
+                            generation: session.generation,
                             gameID: session.gameID,
                             hostPlayerID: self.localPlayerID,
                             guestPlayerID: peer.id
@@ -609,6 +662,7 @@ extension NearbyService: NearbyTransportDelegate {
                               session.hostPlayerID != peer.id {
                         self.lobbySession = LobbySessionContext(
                             sessionID: session.sessionID,
+                            generation: session.generation,
                             gameID: session.gameID,
                             hostPlayerID: peer.id,
                             guestPlayerID: self.localPlayerID
@@ -632,14 +686,15 @@ extension NearbyService: NearbyTransportDelegate {
                 }
 
                 if self.connectedPeers.isEmpty {
-                    if self.outgoingInvitation != nil {
-                        // Preserve the existing behavior during this pure
-                        // architecture refactor. We will harden the state
-                        // machine separately after transport extraction.
-                        self.connectionState = .inviting
-                    } else {
-                        self.connectionState = .searching
-                    }
+                    self.incomingInvitationExpiryWorkItem?.cancel()
+                    self.outgoingInvitationExpiryWorkItem?.cancel()
+                    self.incomingInvitationExpiryWorkItem = nil
+                    self.outgoingInvitationExpiryWorkItem = nil
+                    self.pendingInvitation = nil
+                    self.outgoingInvitation = nil
+                    self.connectingPeer = nil
+                    self.lobbySession = nil
+                    self.connectionState = .searching
                 }
             }
         }
@@ -648,9 +703,20 @@ extension NearbyService: NearbyTransportDelegate {
     func nearbyTransport(
         _ transport: NearbyTransport,
         didReceive message: NearbyMessage,
-        from peer: NearbyPeer
+        from peer: NearbyPeer,
+        session: NearbySessionToken
     ) {
         publishOnMain {
+            guard self.connectionState == .connected,
+                  self.lobbySession?.sessionToken == session,
+                  message.gameID == self.currentGameID,
+                  self.connectedPeers.contains(where: { $0.id == peer.id }) else {
+#if DEBUG
+                print("[NearbyService] Ignored stale message \(message.id) for \(session.sessionID)#\(session.generation)")
+#endif
+                return
+            }
+
             self.lastReceivedMessage = message
             self.errorMessage = nil
         }

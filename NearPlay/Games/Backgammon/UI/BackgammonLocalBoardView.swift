@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Large landscape board used only by Same Phone Backgammon while we iterate
-/// on the final Backgammon presentation. It keeps all rules outside the UI.
+/// Large landscape board shared by every Backgammon mode. Point arrays come
+/// from a presentation-only perspective while all callbacks use canonical indices.
 struct BackgammonLocalBoardView: View {
     let state: BackgammonGameState
 
@@ -9,6 +9,7 @@ struct BackgammonLocalBoardView: View {
     let playerOneName: String
     let playerTwoID: String
     let playerTwoName: String
+    let boardPerspective: BackgammonBoardPerspective
 
     let selectedSource: BackgammonSelectedSource?
     let legalMoves: [BackgammonMove]
@@ -36,15 +37,10 @@ struct BackgammonLocalBoardView: View {
     @State private var dragLocation: CGPoint?
     @State private var hoveredDestination: Int?
 
-    // Visual numbering follows the physical board clockwise:
-    // point 1 = top-left, point 12 = top-right,
-    // point 13 = bottom-right, point 24 = bottom-left.
-    //
-    // Internal indices are pointNumber - 1.
-    private let topLeft = [0, 1, 2, 3, 4, 5]
-    private let topRight = [6, 7, 8, 9, 10, 11]
-    private let bottomRight = [17, 16, 15, 14, 13, 12]
-    private let bottomLeft = [23, 22, 21, 20, 19, 18]
+    private var topLeft: [Int] { boardPerspective.topLeft }
+    private var topRight: [Int] { boardPerspective.topRight }
+    private var bottomRight: [Int] { boardPerspective.bottomRight }
+    private var bottomLeft: [Int] { boardPerspective.bottomLeft }
 
     private let coordinateSpaceName = "BackgammonLocalBoard"
     private let legalGreen = Color(
@@ -130,10 +126,10 @@ struct BackgammonLocalBoardView: View {
                     x: frameInset,
                     width: trayWidth,
                     height: playSize.height,
-                    player: .playerOne,
-                    playerID: playerOneID,
-                    playerName: playerOneName,
-                    borneOffCount: state.playerOneBorneOff
+                    player: leftRailPlayer,
+                    playerID: playerID(for: leftRailPlayer),
+                    playerName: playerName(for: leftRailPlayer),
+                    borneOffCount: state.borneOffCount(for: leftRailPlayer)
                 )
 
                 playerSideRail(
@@ -143,14 +139,14 @@ struct BackgammonLocalBoardView: View {
                         trayWidth,
                     width: trayWidth,
                     height: playSize.height,
-                    player: .playerTwo,
-                    playerID: playerTwoID,
-                    playerName: playerTwoName,
-                    borneOffCount: state.playerTwoBorneOff
+                    player: rightRailPlayer,
+                    playerID: playerID(for: rightRailPlayer),
+                    playerName: playerName(for: rightRailPlayer),
+                    borneOffCount: state.borneOffCount(for: rightRailPlayer)
                 )
 
                 homeTint(
-                    player: .playerOne,
+                    player: topBoardPlayer,
                     isTop: true,
                     originX: playOriginX,
                     originY: playOriginY,
@@ -159,7 +155,7 @@ struct BackgammonLocalBoardView: View {
                 )
 
                 homeTint(
-                    player: .playerTwo,
+                    player: bottomBoardPlayer,
                     isTop: false,
                     originX: playOriginX,
                     originY: playOriginY,
@@ -302,7 +298,9 @@ struct BackgammonLocalBoardView: View {
         } else {
             source = CGPoint(
                 x: originX + playSize.width / 2,
-                y: player == .playerOne ? originY + 20.5 : originY + playSize.height - 20.5
+                y: player == topBoardPlayer
+                    ? originY + 20.5
+                    : originY + playSize.height - 20.5
             )
         }
         let destination: CGPoint
@@ -316,7 +314,7 @@ struct BackgammonLocalBoardView: View {
         } else {
             // The lower section of each player's side rail holds borne-off pieces.
             destination = CGPoint(
-                x: player == .playerOne
+                x: player == leftRailPlayer
                     ? originX - trayWidth / 2
                     : originX + playSize.width + trayWidth / 2,
                 y: originY + playSize.height * 0.75
@@ -642,6 +640,8 @@ struct BackgammonLocalBoardView: View {
         let quadrantHeight = playSize.height / 2
         let color = BackgammonTheme.checkerColor(for: player)
 
+        let isRight = boardPerspective != .samePhone
+
         return Rectangle()
             .fill(color.opacity(0.026))
             .frame(
@@ -651,7 +651,9 @@ struct BackgammonLocalBoardView: View {
             .position(
                 x:
                     originX +
-                    quadrantWidth / 2,
+                    (isRight
+                        ? quadrantWidth * 1.5 + barWidth
+                        : quadrantWidth / 2),
                 y:
                     originY +
                     (isTop
@@ -997,8 +999,8 @@ struct BackgammonLocalBoardView: View {
 
         return VStack(spacing: 6) {
             barCounter(
-                player: .playerOne,
-                count: state.playerOneBar
+                player: topBoardPlayer,
+                count: state.barCount(for: topBoardPlayer)
             )
 
             Spacer(minLength: 4)
@@ -1010,8 +1012,8 @@ struct BackgammonLocalBoardView: View {
             Spacer(minLength: 4)
 
             barCounter(
-                player: .playerTwo,
-                count: state.playerTwoBar
+                player: bottomBoardPlayer,
+                count: state.barCount(for: bottomBoardPlayer)
             )
         }
         .padding(.vertical, 8)
@@ -1269,27 +1271,45 @@ struct BackgammonLocalBoardView: View {
     private func visualLocation(
         for index: Int
     ) -> (column: Int, isTop: Bool) {
-        if let position =
-            topLeft.firstIndex(of: index) {
-            return (position, true)
-        }
+        boardPerspective.visualLocation(
+            forCanonicalPoint: index
+        ) ?? (0, true)
+    }
 
-        if let position =
-            topRight.firstIndex(of: index) {
-            return (position + 6, true)
-        }
+    private var topBoardPlayer: BackgammonPlayer {
+        boardPerspective == .samePhone
+            ? .playerOne
+            : boardPerspective.opponentPlayer
+    }
 
-        if let position =
-            bottomLeft.firstIndex(of: index) {
-            return (position, false)
-        }
+    private var bottomBoardPlayer: BackgammonPlayer {
+        boardPerspective == .samePhone
+            ? .playerTwo
+            : boardPerspective.viewerPlayer
+    }
 
-        if let position =
-            bottomRight.firstIndex(of: index) {
-            return (position + 6, false)
-        }
+    private var leftRailPlayer: BackgammonPlayer {
+        boardPerspective == .samePhone
+            ? .playerOne
+            : boardPerspective.opponentPlayer
+    }
 
-        return (0, true)
+    private var rightRailPlayer: BackgammonPlayer {
+        boardPerspective == .samePhone
+            ? .playerTwo
+            : boardPerspective.viewerPlayer
+    }
+
+    private func playerID(
+        for player: BackgammonPlayer
+    ) -> String {
+        player == .playerOne ? playerOneID : playerTwoID
+    }
+
+    private func playerName(
+        for player: BackgammonPlayer
+    ) -> String {
+        player == .playerOne ? playerOneName : playerTwoName
     }
 
     private func legalMoves(

@@ -82,6 +82,9 @@ struct BackgammonView: View {
                 playerOneName: startPayload.playerOneName,
                 playerTwoID: startPayload.playerTwoID,
                 playerTwoName: startPayload.playerTwoName,
+                boardPerspective: .localPlayer(
+                    localPlayer ?? .playerTwo
+                ),
                 selectedSource: selectedSource,
                 legalMoves: localLegalMoves,
                 moveOptions: localMoveOptions,

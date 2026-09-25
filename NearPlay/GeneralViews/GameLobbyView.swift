@@ -51,6 +51,9 @@ struct GameLobbyView: View {
     // Connect Four
     @State private var connectFourStartPayload: ConnectFourStartPayload?
 
+    // Backgammon
+    @State private var backgammonStartPayload: BackgammonStartPayload?
+
     init(
         game: Game,
         onExitToHome: (() -> Void)? = nil
@@ -73,7 +76,8 @@ struct GameLobbyView: View {
         game.id == Game.ticTacToe.id ||
         game.id == Game.numberRush.id ||
         game.id == Game.battleship.id ||
-        game.id == Game.connectFour.id
+        game.id == Game.connectFour.id ||
+        game.id == Game.backgammon.id
     }
 
     private var hasRequiredNearbyPermissions: Bool {
@@ -951,6 +955,9 @@ struct GameLobbyView: View {
         case Game.connectFour.id:
             startConnectFour()
 
+        case Game.backgammon.id:
+            startBackgammon()
+
         default:
             isStartingGame = false
         }
@@ -1136,6 +1143,49 @@ struct GameLobbyView: View {
         }
     }
 
+    private func startBackgammon() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+
+        let payload = BackgammonStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState: BackgammonGame.makeInitialState(
+                startingPlayerID: nearbyService.localPlayerID
+            )
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+
+            nearbyService.send(
+                NearbyMessage(
+                    gameID: game.id,
+                    senderName: safePlayerName,
+                    type: .gameStart,
+                    payload: data
+                )
+            )
+
+            presentBackgammon(payload)
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage =
+                "Failed to start Backgammon."
+
+            print(
+                "Failed to encode BackgammonStartPayload: \(error)"
+            )
+        }
+    }
+
     // MARK: - Received messages
 
     private func handleReceivedMessage(
@@ -1176,6 +1226,9 @@ struct GameLobbyView: View {
 
             case Game.connectFour.id:
                 handleConnectFourStart(data)
+
+            case Game.backgammon.id:
+                handleBackgammonStart(data)
 
             default:
                 break
@@ -1274,6 +1327,41 @@ struct GameLobbyView: View {
             print(
                 "Failed to decode ConnectFourStartPayload: \(error)"
             )
+        }
+    }
+
+    private func handleBackgammonStart(
+        _ data: Data
+    ) {
+        do {
+            let payload = try JSONDecoder().decode(
+                BackgammonStartPayload.self,
+                from: data
+            )
+
+            presentBackgammon(payload)
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage =
+                "Failed to start Backgammon."
+
+            print(
+                "Failed to decode BackgammonStartPayload: \(error)"
+            )
+        }
+    }
+
+    private func presentBackgammon(
+        _ payload: BackgammonStartPayload
+    ) {
+        backgammonStartPayload = payload
+        isStartingGame = true
+
+        OrientationManager.shared.transition(
+            to: [.landscapeLeft, .landscapeRight]
+        ) {
+            shouldStartGame = true
         }
     }
 
@@ -1429,6 +1517,20 @@ struct GameLobbyView: View {
                     ),
                 onExitToHome: exitToHome
             )
+
+        case Game.backgammon.id:
+            if let backgammonStartPayload {
+                BackgammonView(
+                    game: game,
+                    nearbyService: nearbyService,
+                    localPlayerName: safePlayerName,
+                    startPayload: backgammonStartPayload,
+                    onExitToHome: exitToHome
+                )
+            } else {
+                ProgressView()
+                    .tint(.white)
+            }
 
         default:
             Text("Game not implemented yet")

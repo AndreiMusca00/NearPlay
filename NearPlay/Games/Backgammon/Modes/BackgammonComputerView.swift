@@ -39,6 +39,7 @@ struct BackgammonComputerView: View {
                 gameTitle: game.title, state: controller.state,
                 playerOneID: Self.humanID, playerOneName: localPlayerDisplayName,
                 playerTwoID: Self.computerID, playerTwoName: "Computer",
+                boardPerspective: .localPlayer(.playerOne),
                 selectedSource: selectedSource,
                 legalMoves: visibleLegalMoves, moveOptions: visibleMoveOptions,
                 interactionPlayer: activePlayer,

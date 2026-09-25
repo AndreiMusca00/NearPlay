@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Same-phone landscape layout. No ScrollView: the board and player badges are
-/// fitted directly into the current landscape safe area.
+/// Shared landscape presentation. `boardPerspective` controls only how the
+/// canonical board is displayed; it never changes game state or move indices.
 struct BackgammonLocalLandscapeScreen: View {
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
@@ -19,6 +19,8 @@ struct BackgammonLocalLandscapeScreen: View {
     let playerOneName: String
     let playerTwoID: String
     let playerTwoName: String
+
+    var boardPerspective: BackgammonBoardPerspective = .samePhone
 
     let selectedSource: BackgammonSelectedSource?
     let legalMoves: [BackgammonMove]
@@ -99,6 +101,7 @@ struct BackgammonLocalLandscapeScreen: View {
                 playerOneName: playerOneName,
                 playerTwoID: playerTwoID,
                 playerTwoName: playerTwoName,
+                boardPerspective: boardPerspective,
                 selectedSource: selectedSource,
                 legalMoves: legalMoves,
                 moveOptions: moveOptions,
@@ -206,8 +209,11 @@ struct BackgammonLocalLandscapeScreen: View {
         width: CGFloat,
         height: CGFloat
     ) -> some View {
+        let viewerPlayerID = boardPerspective.viewerPlayer == .playerOne
+            ? playerOneID
+            : playerTwoID
         let localUserRolled =
-            state.activePlayerID == playerTwoID
+            state.activePlayerID == viewerPlayerID
 
         // Per the Same Phone UX:
         // local user rolls into the left half,

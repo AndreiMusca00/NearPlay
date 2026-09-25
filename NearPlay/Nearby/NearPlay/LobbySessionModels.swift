@@ -12,6 +12,10 @@ enum InvitationContextKind: String, Codable, Equatable {
 struct InvitationContext: Codable, Equatable {
     let kind: InvitationContextKind
     let sessionID: String
+    /// Monotonically increasing on the device that owns the invitation.
+    /// Together with `sessionID`, this prevents delayed packets from an older
+    /// attempt from being accepted by a newer connection.
+    let generation: UInt64
     let gameID: String
     let inviterPlayerID: String
     let inviterPlayerName: String
@@ -23,6 +27,7 @@ struct InvitationContext: Codable, Equatable {
         InvitationContext(
             kind: kind,
             sessionID: sessionID,
+            generation: generation,
             gameID: gameID,
             inviterPlayerID: inviterPlayerID,
             inviterPlayerName: inviterPlayerName,
@@ -31,13 +36,40 @@ struct InvitationContext: Codable, Equatable {
     }
 }
 
+/// Immutable identity for one logical nearby session.
+///
+/// A UUID protects sessions across launches while `generation` orders attempts
+/// created during the same process lifetime. Every handshake packet carries
+/// both values and must match exactly before it can mutate connection state.
+struct NearbySessionToken: Codable, Equatable, Hashable {
+    let sessionID: String
+    let generation: UInt64
+}
+
+extension InvitationContext {
+    var sessionToken: NearbySessionToken {
+        NearbySessionToken(
+            sessionID: sessionID,
+            generation: generation
+        )
+    }
+}
+
 /// Shared identity of the current lobby connection.
 /// This can later be persisted and reused by the reconnect flow.
 struct LobbySessionContext: Codable, Equatable {
     let sessionID: String
+    let generation: UInt64
     let gameID: String
     let hostPlayerID: String
     let guestPlayerID: String
+
+    var sessionToken: NearbySessionToken {
+        NearbySessionToken(
+            sessionID: sessionID,
+            generation: generation
+        )
+    }
 
     func contains(playerID: String) -> Bool {
         playerID == hostPlayerID ||

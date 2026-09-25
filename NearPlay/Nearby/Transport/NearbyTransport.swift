@@ -4,6 +4,7 @@ import Foundation
 ///
 /// NearbyService talks only to this protocol. The concrete transport can be
 /// MultipeerConnectivity today, CoreBluetooth next, and Network.framework later.
+@MainActor
 protocol NearbyTransport: AnyObject {
     var delegate: NearbyTransportDelegate? { get set }
 
@@ -42,6 +43,13 @@ enum NearbyTransportPeerState: Equatable {
     case disconnected
 }
 
+enum NearbyTransportInvitationCancellationReason: String, Equatable {
+    case timedOut
+    case remoteClosed
+    case transportLost
+}
+
+@MainActor
 protocol NearbyTransportDelegate: AnyObject {
     func nearbyTransport(
         _ transport: NearbyTransport,
@@ -77,14 +85,23 @@ protocol NearbyTransportDelegate: AnyObject {
 
     func nearbyTransport(
         _ transport: NearbyTransport,
+        didCancelInvitation context: InvitationContext,
+        with peer: NearbyPeer?,
+        reason: NearbyTransportInvitationCancellationReason
+    )
+
+    func nearbyTransport(
+        _ transport: NearbyTransport,
         peer: NearbyPeer,
-        didChange state: NearbyTransportPeerState
+        didChange state: NearbyTransportPeerState,
+        session: NearbySessionToken
     )
 
     func nearbyTransport(
         _ transport: NearbyTransport,
         didReceive message: NearbyMessage,
-        from peer: NearbyPeer
+        from peer: NearbyPeer,
+        session: NearbySessionToken
     )
 
     func nearbyTransport(
