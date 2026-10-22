@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSMotionUsageDescription</key>
+	<string>NearPlay uses device motion to move your shield in motion-controlled nearby games.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_nearplay._tcp</string>

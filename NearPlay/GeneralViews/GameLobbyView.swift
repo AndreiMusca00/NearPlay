@@ -57,6 +57,9 @@ struct GameLobbyView: View {
     // Dots & Boxes
     @State private var dotsAndBoxesStartPayload: DotsAndBoxesStartPayload?
 
+    // Ricochet
+    @State private var ricochetStartPayload: RicochetStartPayload?
+
     init(
         game: Game,
         onExitToHome: (() -> Void)? = nil
@@ -81,7 +84,8 @@ struct GameLobbyView: View {
         game.id == Game.battleship.id ||
         game.id == Game.connectFour.id ||
         game.id == Game.backgammon.id ||
-        game.id == Game.dotsAndBoxes.id
+        game.id == Game.dotsAndBoxes.id ||
+        game.id == Game.ricochet.id
     }
 
     private var hasRequiredNearbyPermissions: Bool {
@@ -965,6 +969,9 @@ struct GameLobbyView: View {
         case Game.dotsAndBoxes.id:
             startDotsAndBoxes()
 
+        case Game.ricochet.id:
+            startRicochet()
+
         default:
             isStartingGame = false
         }
@@ -1221,6 +1228,32 @@ struct GameLobbyView: View {
         }
     }
 
+    private func startRicochet() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+        let payload = RicochetStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState: RicochetGame.makeInitialState(startingPlayerID: nearbyService.localPlayerID)
+        )
+        do {
+            let data = try JSONEncoder().encode(payload)
+            nearbyService.send(NearbyMessage(gameID: game.id, senderName: safePlayerName, type: .gameStart, payload: data))
+            ricochetStartPayload = payload
+            shouldStartGame = true
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage = "Failed to start Ricochet."
+        }
+    }
+
     // MARK: - Received messages
 
     private func handleReceivedMessage(
@@ -1267,6 +1300,9 @@ struct GameLobbyView: View {
 
             case Game.dotsAndBoxes.id:
                 handleDotsAndBoxesStart(data)
+
+            case Game.ricochet.id:
+                handleRicochetStart(data)
 
             default:
                 break
@@ -1397,6 +1433,16 @@ struct GameLobbyView: View {
             shouldStartGame = true
         } catch {
             nearbyService.errorMessage = "Failed to start Dots & Boxes."
+        }
+    }
+
+    private func handleRicochetStart(_ data: Data) {
+        do {
+            ricochetStartPayload = try JSONDecoder().decode(RicochetStartPayload.self, from: data)
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Ricochet."
         }
     }
 
@@ -1592,6 +1638,22 @@ struct GameLobbyView: View {
                     playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
                     playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
                     initialState: DotsAndBoxesGame.makeInitialState(startingPlayerID: nearbyService.localPlayerID)
+                ),
+                onExitToHome: exitToHome
+            )
+
+        case Game.ricochet.id:
+            RicochetView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload: ricochetStartPayload ?? RicochetStartPayload(
+                    sessionID: nearbyService.lobbySession?.sessionID ?? UUID().uuidString,
+                    playerOneID: nearbyService.localPlayerID,
+                    playerOneName: safePlayerName,
+                    playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
+                    playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
+                    initialState: RicochetGame.makeInitialState(startingPlayerID: nearbyService.localPlayerID)
                 ),
                 onExitToHome: exitToHome
             )

@@ -7,6 +7,11 @@
 
 import Foundation
 
+enum GameBadge: String, Hashable {
+    case new = "NEW"
+    case updated = "UPDATED"
+}
+
 struct Game: Identifiable, Hashable {
     let id: String
     let title: String
@@ -27,6 +32,11 @@ struct Game: Identifiable, Hashable {
     // Modurile disponibile. Jocurile vechi rămân Nearby implicit.
     let supportedModes: Set<GamePlayMode>
 
+    // Marcaje editoriale folosite în lista principală.
+    let badge: GameBadge?
+    let isPopular: Bool
+    let displayPriority: Int
+
     // nil = joc gratuit. Pentru un joc premium, pune aici exact Product ID-ul
     // configurat în StoreKit / App Store Connect.
     let productID: String?
@@ -41,6 +51,9 @@ struct Game: Identifiable, Hashable {
         fallbackSystemImage: String,
         accentHex: String,
         supportedModes: Set<GamePlayMode> = [.nearby],
+        badge: GameBadge? = nil,
+        isPopular: Bool = false,
+        displayPriority: Int = 0,
         productID: String? = nil
     ) {
         self.id = id
@@ -52,6 +65,9 @@ struct Game: Identifiable, Hashable {
         self.fallbackSystemImage = fallbackSystemImage
         self.accentHex = accentHex
         self.supportedModes = supportedModes
+        self.badge = badge
+        self.isPopular = isPopular
+        self.displayPriority = displayPriority
         self.productID = productID
     }
 
@@ -154,7 +170,9 @@ extension Game {
             .nearby,
             .local,
             .computer
-        ]
+        ],
+        isPopular: true,
+        displayPriority: 80
     )
 
     static let dotsAndBoxes = Game(
@@ -166,11 +184,30 @@ extension Game {
         imageName: "game_dots_and_boxes",
         fallbackSystemImage: "square.grid.3x3.square",
         accentHex: "#20C7FF",
-        supportedModes: [.nearby, .local, .computer]
+        supportedModes: [.nearby, .local, .computer],
+        badge: .new,
+        isPopular: true,
+        displayPriority: 60
+    )
+
+    static let ricochet = Game(
+        id: "ricochet",
+        title: "Ricochet",
+        shortDescription: "Tilt, deflect, and send the pulse across two screens.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_ricochet",
+        fallbackSystemImage: "bolt.shield.fill",
+        accentHex: "#26E6F2",
+        supportedModes: [.nearby],
+        badge: .new,
+        isPopular: true,
+        displayPriority: 100
     )
 
     static let all: [Game] = [
         ticTacToe,
+        ricochet,
         dotsAndBoxes,
         backgammon,
         numberRush,

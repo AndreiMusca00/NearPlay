@@ -18,7 +18,11 @@ struct GamesListView: View {
 
     @State private var isEditingName = false
 
-    @State private var selectedFilter: GamesFilter = .all
+    @State private var selectedFilter: GamesFilter = .popular
+
+    @State private var filterMovesForward = true
+
+    @Namespace private var filterSelectionNamespace
 
     @State private var navigationPath = NavigationPath()
 
@@ -38,47 +42,47 @@ struct GamesListView: View {
 
                     topHeader
 
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 16)
 
-                        .padding(.top, 12)
+                        .padding(.top, 8)
 
                     // MARK: Fixed Filters
 
                     filterButtons
 
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 16)
 
-                        .padding(.top, 28)
+                        .padding(.top, 18)
 
-                        .padding(.bottom, 16)
+                        .padding(.bottom, 12)
 
                     Divider()
 
                         .overlay(Color.white.opacity(0.08))
 
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 16)
 
                     // MARK: Scrollable Games Area
 
                     ScrollView {
 
-                        if filteredGames.isEmpty {
+                        ZStack(alignment: .top) {
 
-                            emptyFavoritesView
+                            filterContent
 
-                                .padding(.top, 70)
+                                .id(selectedFilter)
 
-                        } else {
-
-                            gamesList
+                                .transition(filterContentTransition)
 
                         }
+
+                        .frame(maxWidth: .infinity)
 
                     }
 
                     .scrollIndicators(.hidden)
 
-                    .padding(.bottom, 30)
+                    .padding(.bottom, 20)
 
                 }
 
@@ -98,17 +102,35 @@ struct GamesListView: View {
 
             .navigationDestination(for: Game.self) { game in
 
-                GameEntryView(
+                if game.id == Game.ricochet.id {
 
-                    game: game,
+                    GameLobbyView(
 
-                    onExitToHome: {
+                        game: game,
 
-                        navigationPath = NavigationPath()
+                        onExitToHome: {
 
-                    }
+                            navigationPath = NavigationPath()
 
-                )
+                        }
+
+                    )
+
+                } else {
+
+                    GameEntryView(
+
+                        game: game,
+
+                        onExitToHome: {
+
+                            navigationPath = NavigationPath()
+
+                        }
+
+                    )
+
+                }
 
             }
 
@@ -191,7 +213,7 @@ struct GamesListView: View {
 
                         .system(
 
-                            size: 42,
+                            size: 38,
 
                             weight: .bold,
 
@@ -261,7 +283,7 @@ struct GamesListView: View {
 
                                 .system(
 
-                                    size: 17,
+                                    size: 15,
 
                                     weight: .medium
 
@@ -319,7 +341,7 @@ struct GamesListView: View {
 
                             .system(
 
-                                size: 21,
+                                size: 19,
 
                                 weight: .semibold
 
@@ -329,7 +351,7 @@ struct GamesListView: View {
 
                         .foregroundStyle(.white)
 
-                        .frame(width: 50, height: 50)
+                        .frame(width: 46, height: 46)
 
                         .background {
 
@@ -425,15 +447,19 @@ struct GamesListView: View {
 
     private var filterButtons: some View {
 
-        HStack(spacing: 14) {
+        HStack(spacing: 4) {
 
             filterButton(
 
-                title: "All Games",
+                title: "Popular",
 
-                icon: "gamecontroller.fill",
+                icon: selectedFilter == .popular
 
-                filter: .all
+                    ? "flame.fill"
+
+                    : "flame",
+
+                filter: .popular
 
             )
 
@@ -451,9 +477,35 @@ struct GamesListView: View {
 
             )
 
-            Spacer()
+            filterButton(
+
+                title: "All Games",
+
+                icon: "gamecontroller.fill",
+
+                filter: .all
+
+            )
 
         }
+
+        .padding(4)
+
+        .background(
+
+            RoundedRectangle(cornerRadius: 17, style: .continuous)
+
+                .fill(Color.white.opacity(0.045))
+
+        )
+
+        .overlay(
+
+            RoundedRectangle(cornerRadius: 17, style: .continuous)
+
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+
+        )
 
     }
 
@@ -471,9 +523,17 @@ struct GamesListView: View {
 
         return Button {
 
+            guard selectedFilter != filter else {
+
+                return
+
+            }
+
+            filterMovesForward = filter.order > selectedFilter.order
+
             withAnimation(
 
-                .easeInOut(duration: 0.2)
+                .spring(response: 0.42, dampingFraction: 0.82)
 
             ) {
 
@@ -483,7 +543,7 @@ struct GamesListView: View {
 
         } label: {
 
-            HStack(spacing: 9) {
+            HStack(spacing: 6) {
 
                 Image(systemName: icon)
 
@@ -491,13 +551,17 @@ struct GamesListView: View {
 
                         .system(
 
-                            size: 17,
+                            size: 14,
 
                             weight: .semibold
 
                         )
 
                     )
+
+                    .contentTransition(.symbolEffect(.replace))
+
+                    .scaleEffect(isSelected ? 1.05 : 0.94)
 
                 Text(title)
 
@@ -505,7 +569,7 @@ struct GamesListView: View {
 
                         .system(
 
-                            size: 16,
+                            size: 13,
 
                             weight: .semibold
 
@@ -513,87 +577,127 @@ struct GamesListView: View {
 
                     )
 
+                    .scaleEffect(isSelected ? 1 : 0.97)
+
             }
 
             .foregroundStyle(
 
                 isSelected
 
-                    ? Color(
-
-                        red: 0.35,
-
-                        green: 0.66,
-
-                        blue: 1.00
-
-                    )
+                    ? Color.white
 
                     : Color.white.opacity(0.5)
 
             )
 
-            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity)
 
-            .frame(height: 48)
+            .frame(height: 38)
 
             .background {
 
                 if isSelected {
 
-                    Capsule()
+                    ZStack {
 
-                        .fill(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
 
-                            Color(
+                            .fill(
 
-                                red: 0.05,
+                                LinearGradient(
 
-                                green: 0.30,
+                                    colors: [
 
-                                blue: 0.50
+                                        Color(red: 0.06, green: 0.57, blue: 0.94),
+
+                                        Color(red: 0.48, green: 0.28, blue: 0.98)
+
+                                    ],
+
+                                    startPoint: .topLeading,
+
+                                    endPoint: .bottomTrailing
+
+                                )
 
                             )
 
-                            .opacity(0.22)
+                            .shadow(
 
-                        )
+                                color: Color(red: 0.20, green: 0.50, blue: 1.0).opacity(0.26),
+
+                                radius: 8,
+
+                                y: 3
+
+                            )
+
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+
+                    }
+
+                    .matchedGeometryEffect(
+
+                        id: "selected-game-filter",
+
+                        in: filterSelectionNamespace
+
+                    )
 
                 }
 
             }
 
-            .overlay {
+            .animation(
 
-                if isSelected {
+                .spring(response: 0.36, dampingFraction: 0.76),
 
-                    Capsule()
+                value: isSelected
 
-                        .stroke(
-
-                            Color(
-
-                                red: 0.20,
-
-                                green: 0.58,
-
-                                blue: 1.00
-
-                            )
-
-                            .opacity(0.45),
-
-                            lineWidth: 1
-
-                        )
-
-                }
-
-            }
+            )
 
         }
 
         .buttonStyle(.plain)
+
+        .zIndex(isSelected ? 1 : 0)
+
+    }
+
+    @ViewBuilder
+
+    private var filterContent: some View {
+
+        if filteredGames.isEmpty {
+
+            emptyFilterView
+
+                .padding(.top, 70)
+
+        } else {
+
+            gamesList
+
+        }
+
+    }
+
+    private var filterContentTransition: AnyTransition {
+
+        let insertionEdge: Edge = filterMovesForward ? .trailing : .leading
+
+        let removalEdge: Edge = filterMovesForward ? .leading : .trailing
+
+        return .asymmetric(
+
+            insertion: .move(edge: insertionEdge).combined(with: .opacity),
+
+            removal: .move(edge: removalEdge).combined(with: .opacity)
+
+        )
 
     }
 
@@ -623,9 +727,9 @@ struct GamesListView: View {
 
                         )
 
-                        .padding(.leading, 98)
+                        .padding(.leading, 82)
 
-                        .padding(.trailing, 20)
+                        .padding(.trailing, 16)
 
                 }
 
@@ -637,7 +741,7 @@ struct GamesListView: View {
 
     private func gameRow(_ game: Game) -> some View {
 
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
 
             Group {
 
@@ -687,7 +791,7 @@ struct GamesListView: View {
 
                     .system(
 
-                        size: 22,
+                        size: 19,
 
                         weight: .medium
 
@@ -713,7 +817,7 @@ struct GamesListView: View {
 
                 )
 
-                .frame(width: 42, height: 42)
+                .frame(width: 36, height: 36)
 
                 .contentShape(Rectangle())
 
@@ -735,27 +839,27 @@ struct GamesListView: View {
 
         }
 
-        .padding(.leading, 20)
+        .padding(.leading, 16)
 
-        .padding(.trailing, 18)
+        .padding(.trailing, 14)
 
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
 
     }
 
     private func gameMainContent(_ game: Game) -> some View {
 
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
 
             GameIconView(
 
                 game: game,
 
-                size: 64,
+                size: 54,
 
-                cornerRadius: 17,
+                cornerRadius: 15,
 
-                symbolSize: 25
+                symbolSize: 22
 
             )
 
@@ -763,31 +867,41 @@ struct GamesListView: View {
 
                 alignment: .leading,
 
-                spacing: 6
+                spacing: 4
 
             ) {
 
-                Text(game.title)
+                HStack(spacing: 7) {
 
-                    .font(
+                    Text(game.title)
 
-                        .system(
+                        .font(
 
-                            size: 19,
+                            .system(
 
-                            weight: .semibold
+                                size: 17,
+
+                                weight: .semibold
+
+                            )
 
                         )
 
-                    )
+                        .foregroundStyle(.white)
 
-                    .foregroundStyle(.white)
+                        .lineLimit(1)
 
-                    .lineLimit(1)
+                    if let badge = game.badge {
+
+                        gameBadge(badge, color: game.accentColor)
+
+                    }
+
+                }
 
                 Text(playerText(for: game))
 
-                    .font(.system(size: 15))
+                    .font(.system(size: 13))
 
                     .foregroundStyle(
 
@@ -802,6 +916,46 @@ struct GamesListView: View {
         }
 
         .contentShape(Rectangle())
+
+    }
+
+    private func gameBadge(
+
+        _ badge: GameBadge,
+
+        color: Color
+
+    ) -> some View {
+
+        Text(badge.rawValue)
+
+            .font(.system(size: 9, weight: .black, design: .rounded))
+
+            .tracking(0.7)
+
+            .foregroundStyle(color)
+
+            .padding(.horizontal, 7)
+
+            .frame(height: 19)
+
+            .background(
+
+                Capsule()
+
+                    .fill(color.opacity(0.13))
+
+            )
+
+            .overlay(
+
+                Capsule()
+
+                    .stroke(color.opacity(0.38), lineWidth: 1)
+
+            )
+
+            .fixedSize()
 
     }
 
@@ -925,6 +1079,10 @@ struct GamesListView: View {
 
             games = Game.all
 
+        case .popular:
+
+            games = Game.all.filter(\.isPopular)
+
         case .liked:
 
             games = Game.all.filter { game in
@@ -937,25 +1095,17 @@ struct GamesListView: View {
 
         return games.sorted { firstGame, secondGame in
 
-            let firstIsUnlocked =
+            let firstIsNew = firstGame.badge == .new
 
-                purchaseManager.isUnlocked(firstGame)
+            let secondIsNew = secondGame.badge == .new
 
-            let secondIsUnlocked =
+            if firstIsNew != secondIsNew {
 
-                purchaseManager.isUnlocked(secondGame)
-
-            // Free / unlocked games first.
-
-            // Locked premium games go to the bottom.
-
-            if firstIsUnlocked != secondIsUnlocked {
-
-                return firstIsUnlocked
+                return firstIsNew
 
             }
 
-            // Alphabetical order inside each group.
+            // Alphabetical order inside the NEW and regular groups.
 
             return firstGame.title
 
@@ -1025,13 +1175,13 @@ struct GamesListView: View {
 
     }
 
-    // MARK: - Empty Favorites
+    // MARK: - Empty Filter
 
-    private var emptyFavoritesView: some View {
+    private var emptyFilterView: some View {
 
         VStack(spacing: 14) {
 
-            Image(systemName: "heart.slash")
+            Image(systemName: selectedFilter == .popular ? "flame" : "heart.slash")
 
                 .font(
 
@@ -1065,7 +1215,7 @@ struct GamesListView: View {
 
                 )
 
-            Text("No liked games")
+            Text(selectedFilter == .popular ? "No popular games yet" : "No liked games")
 
                 .font(
 
@@ -1081,11 +1231,9 @@ struct GamesListView: View {
 
                 .foregroundStyle(.white)
 
-            Text(
-
-                "Tap the heart next to a game\nto find it here."
-
-            )
+            Text(selectedFilter == .popular
+                 ? "Games selected for this collection\nwill appear here."
+                 : "Tap the heart next to a game\nto find it here.")
 
             .font(.system(size: 15))
 
@@ -1197,7 +1345,29 @@ private enum GamesFilter {
 
     case all
 
+    case popular
+
     case liked
+
+    var order: Int {
+
+        switch self {
+
+        case .popular:
+
+            return 0
+
+        case .liked:
+
+            return 1
+
+        case .all:
+
+            return 2
+
+        }
+
+    }
 
 }
 
