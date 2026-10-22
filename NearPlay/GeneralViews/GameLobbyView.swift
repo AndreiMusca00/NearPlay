@@ -54,6 +54,9 @@ struct GameLobbyView: View {
     // Backgammon
     @State private var backgammonStartPayload: BackgammonStartPayload?
 
+    // Dots & Boxes
+    @State private var dotsAndBoxesStartPayload: DotsAndBoxesStartPayload?
+
     init(
         game: Game,
         onExitToHome: (() -> Void)? = nil
@@ -77,7 +80,8 @@ struct GameLobbyView: View {
         game.id == Game.numberRush.id ||
         game.id == Game.battleship.id ||
         game.id == Game.connectFour.id ||
-        game.id == Game.backgammon.id
+        game.id == Game.backgammon.id ||
+        game.id == Game.dotsAndBoxes.id
     }
 
     private var hasRequiredNearbyPermissions: Bool {
@@ -958,6 +962,9 @@ struct GameLobbyView: View {
         case Game.backgammon.id:
             startBackgammon()
 
+        case Game.dotsAndBoxes.id:
+            startDotsAndBoxes()
+
         default:
             isStartingGame = false
         }
@@ -1186,6 +1193,34 @@ struct GameLobbyView: View {
         }
     }
 
+    private func startDotsAndBoxes() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+
+        let payload = DotsAndBoxesStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState: DotsAndBoxesGame.makeInitialState(startingPlayerID: nearbyService.localPlayerID)
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+            nearbyService.send(NearbyMessage(gameID: game.id, senderName: safePlayerName, type: .gameStart, payload: data))
+            dotsAndBoxesStartPayload = payload
+            shouldStartGame = true
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage = "Failed to start Dots & Boxes."
+        }
+    }
+
     // MARK: - Received messages
 
     private func handleReceivedMessage(
@@ -1229,6 +1264,9 @@ struct GameLobbyView: View {
 
             case Game.backgammon.id:
                 handleBackgammonStart(data)
+
+            case Game.dotsAndBoxes.id:
+                handleDotsAndBoxesStart(data)
 
             default:
                 break
@@ -1349,6 +1387,16 @@ struct GameLobbyView: View {
             print(
                 "Failed to decode BackgammonStartPayload: \(error)"
             )
+        }
+    }
+
+    private func handleDotsAndBoxesStart(_ data: Data) {
+        do {
+            dotsAndBoxesStartPayload = try JSONDecoder().decode(DotsAndBoxesStartPayload.self, from: data)
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Dots & Boxes."
         }
     }
 
@@ -1531,6 +1579,22 @@ struct GameLobbyView: View {
                 ProgressView()
                     .tint(.white)
             }
+
+        case Game.dotsAndBoxes.id:
+            DotsAndBoxesView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload: dotsAndBoxesStartPayload ?? DotsAndBoxesStartPayload(
+                    sessionID: nearbyService.lobbySession?.sessionID ?? UUID().uuidString,
+                    playerOneID: nearbyService.localPlayerID,
+                    playerOneName: safePlayerName,
+                    playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
+                    playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
+                    initialState: DotsAndBoxesGame.makeInitialState(startingPlayerID: nearbyService.localPlayerID)
+                ),
+                onExitToHome: exitToHome
+            )
 
         default:
             Text("Game not implemented yet")

@@ -109,6 +109,9 @@ struct GameEntryView: View {
             BackgammonLocalView(
                 game: game
             )
+
+        case Game.dotsAndBoxes.id:
+            DotsAndBoxesLocalView(game: game)
             
         default:
             unavailableDestination(
@@ -156,6 +159,9 @@ struct GameEntryView: View {
                 difficulty:
                     selectedDifficulty
             )
+
+        case Game.dotsAndBoxes.id:
+            DotsAndBoxesComputerView(game: game, difficulty: selectedDifficulty)
             
         default:
             unavailableDestination(

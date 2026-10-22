@@ -157,8 +157,21 @@ extension Game {
         ]
     )
 
+    static let dotsAndBoxes = Game(
+        id: "dots_and_boxes",
+        title: "Dots & Boxes",
+        shortDescription: "Draw lines, close boxes, and control the board.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_dots_and_boxes",
+        fallbackSystemImage: "square.grid.3x3.square",
+        accentHex: "#20C7FF",
+        supportedModes: [.nearby, .local, .computer]
+    )
+
     static let all: [Game] = [
         ticTacToe,
+        dotsAndBoxes,
         backgammon,
         numberRush,
         battleship,
