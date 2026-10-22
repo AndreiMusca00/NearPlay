@@ -60,6 +60,9 @@ struct GameLobbyView: View {
     // Ricochet
     @State private var ricochetStartPayload: RicochetStartPayload?
 
+    // Tilt Race
+    @State private var tiltRaceStartPayload: TiltRaceStartPayload?
+
     init(
         game: Game,
         onExitToHome: (() -> Void)? = nil
@@ -85,7 +88,8 @@ struct GameLobbyView: View {
         game.id == Game.connectFour.id ||
         game.id == Game.backgammon.id ||
         game.id == Game.dotsAndBoxes.id ||
-        game.id == Game.ricochet.id
+        game.id == Game.ricochet.id ||
+        game.id == Game.tiltRace.id
     }
 
     private var hasRequiredNearbyPermissions: Bool {
@@ -972,6 +976,9 @@ struct GameLobbyView: View {
         case Game.ricochet.id:
             startRicochet()
 
+        case Game.tiltRace.id:
+            startTiltRace()
+
         default:
             isStartingGame = false
         }
@@ -1254,6 +1261,42 @@ struct GameLobbyView: View {
         }
     }
 
+    private func startTiltRace() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+
+        let payload = TiltRaceStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState: TiltRaceGame.makeInitialState(
+                playerOneID: nearbyService.localPlayerID,
+                playerTwoID: firstPeer.id
+            )
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+            nearbyService.send(NearbyMessage(
+                gameID: game.id,
+                senderName: safePlayerName,
+                type: .gameStart,
+                payload: data
+            ))
+            tiltRaceStartPayload = payload
+            shouldStartGame = true
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage = "Failed to start Tilt Race."
+        }
+    }
+
     // MARK: - Received messages
 
     private func handleReceivedMessage(
@@ -1303,6 +1346,9 @@ struct GameLobbyView: View {
 
             case Game.ricochet.id:
                 handleRicochetStart(data)
+
+            case Game.tiltRace.id:
+                handleTiltRaceStart(data)
 
             default:
                 break
@@ -1443,6 +1489,19 @@ struct GameLobbyView: View {
             shouldStartGame = true
         } catch {
             nearbyService.errorMessage = "Failed to start Ricochet."
+        }
+    }
+
+    private func handleTiltRaceStart(_ data: Data) {
+        do {
+            tiltRaceStartPayload = try JSONDecoder().decode(
+                TiltRaceStartPayload.self,
+                from: data
+            )
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Tilt Race."
         }
     }
 
@@ -1654,6 +1713,25 @@ struct GameLobbyView: View {
                     playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
                     playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
                     initialState: RicochetGame.makeInitialState(startingPlayerID: nearbyService.localPlayerID)
+                ),
+                onExitToHome: exitToHome
+            )
+
+        case Game.tiltRace.id:
+            TiltRaceView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload: tiltRaceStartPayload ?? TiltRaceStartPayload(
+                    sessionID: nearbyService.lobbySession?.sessionID ?? UUID().uuidString,
+                    playerOneID: nearbyService.localPlayerID,
+                    playerOneName: safePlayerName,
+                    playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
+                    playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
+                    initialState: TiltRaceGame.makeInitialState(
+                        playerOneID: nearbyService.localPlayerID,
+                        playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer"
+                    )
                 ),
                 onExitToHome: exitToHome
             )

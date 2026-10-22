@@ -205,9 +205,25 @@ extension Game {
         displayPriority: 100
     )
 
+    static let tiltRace = Game(
+        id: "tilt_race",
+        title: "Tilt Race",
+        shortDescription: "Tilt your phone and race through every glowing gate.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_tilt_race",
+        fallbackSystemImage: "circle.circle.fill",
+        accentHex: "#9DFF2E",
+        supportedModes: [.nearby],
+        badge: .new,
+        isPopular: true,
+        displayPriority: 90
+    )
+
     static let all: [Game] = [
         ticTacToe,
         ricochet,
+        tiltRace,
         dotsAndBoxes,
         backgammon,
         numberRush,

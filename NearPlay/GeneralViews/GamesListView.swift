@@ -102,7 +102,7 @@ struct GamesListView: View {
 
             .navigationDestination(for: Game.self) { game in
 
-                if game.id == Game.ricochet.id {
+                if game.supportedModes == [.nearby] {
 
                     GameLobbyView(
 
