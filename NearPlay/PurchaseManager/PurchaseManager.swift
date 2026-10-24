@@ -108,7 +108,11 @@ final class PurchaseManager: ObservableObject {
             return true
         }
 
-        return purchasedProductIDs.contains(productID)
+        return ownsLifetimePass || purchasedProductIDs.contains(productID)
+    }
+
+    var ownsLifetimePass: Bool {
+        purchasedProductIDs.contains(PurchaseCatalog.lifetimePass)
     }
 
     // MARK: - Product
@@ -122,10 +126,18 @@ final class PurchaseManager: ObservableObject {
         return productsByID[productID]
     }
 
+    var lifetimePassProduct: Product? {
+        productsByID[PurchaseCatalog.lifetimePass]
+    }
+
     // MARK: - Display Price
 
     func displayPrice(for game: Game) -> String? {
         product(for: game)?.displayPrice
+    }
+
+    var lifetimePassDisplayPrice: String? {
+        lifetimePassProduct?.displayPrice
     }
 
     // MARK: - Purchased Games Count
@@ -138,7 +150,7 @@ final class PurchaseManager: ObservableObject {
                 return
             }
 
-            if purchasedProductIDs.contains(productID) {
+            if ownsLifetimePass || purchasedProductIDs.contains(productID) {
                 count += 1
             }
         }
@@ -148,7 +160,7 @@ final class PurchaseManager: ObservableObject {
 
     func loadProducts() async {
 
-        let productIDs = Game.purchasableProductIDs
+        let productIDs = PurchaseCatalog.allProductIDs
 
         guard !productIDs.isEmpty else {
             productsByID = [:]
@@ -207,6 +219,21 @@ final class PurchaseManager: ObservableObject {
         guard let productID = game.productID else {
             return .purchased
         }
+
+        if ownsLifetimePass {
+            return .purchased
+        }
+
+        return try await purchase(productID: productID)
+    }
+
+    func purchaseLifetimePass() async throws -> PurchaseOutcome {
+        try await purchase(productID: PurchaseCatalog.lifetimePass)
+    }
+
+    private func purchase(
+        productID: String
+    ) async throws -> PurchaseOutcome {
 
         // Dacă deja este cumpărat, nu pornim din nou
         // dialogul Apple.
@@ -362,7 +389,7 @@ final class PurchaseManager: ObservableObject {
                     continue
                 }
 
-                guard Game.purchasableProductIDs.contains(
+                guard PurchaseCatalog.allProductIDs.contains(
                     transaction.productID
                 ) else {
                     continue
@@ -398,7 +425,7 @@ final class PurchaseManager: ObservableObject {
             "[StoreKit] Checking latest transactions..."
         )
 
-        for productID in Game.purchasableProductIDs {
+        for productID in PurchaseCatalog.allProductIDs {
 
             // Fallback-ul acesta este destinat
             // produselor Non-Consumable.
@@ -546,6 +573,13 @@ final class PurchaseManager: ObservableObject {
                 "[StoreKit] Transaction update:",
                 transaction.productID
             )
+
+            guard PurchaseCatalog.allProductIDs.contains(
+                transaction.productID
+            ) else {
+                await transaction.finish()
+                return
+            }
 
             if transaction.revocationDate == nil {
 

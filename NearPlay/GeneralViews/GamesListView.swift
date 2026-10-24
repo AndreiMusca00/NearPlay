@@ -28,6 +28,8 @@ struct GamesListView: View {
 
     @State private var selectedGameForPurchase: Game?
 
+    @State private var isLifetimePassPresented = false
+
     var body: some View {
 
         NavigationStack(path: $navigationPath) {
@@ -65,19 +67,20 @@ struct GamesListView: View {
                     // MARK: Scrollable Games Area
 
                     ScrollView {
+                        VStack(spacing: 10) {
+                            if shouldShowBundleOffer {
+                                bundleOfferBanner
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 10)
+                            }
 
-                        ZStack(alignment: .top) {
-
-                            filterContent
-
-                                .id(selectedFilter)
-
-                                .transition(filterContentTransition)
-
+                            ZStack(alignment: .top) {
+                                filterContent
+                                    .id(selectedFilter)
+                                    .transition(filterContentTransition)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
-
-                        .frame(maxWidth: .infinity)
-
                     }
 
                     .scrollIndicators(.hidden)
@@ -162,6 +165,14 @@ struct GamesListView: View {
 
                 .preferredColorScheme(.dark)
 
+            }
+
+            .sheet(isPresented: $isLifetimePassPresented) {
+                AllGamesBundlePurchaseSheet()
+                    .environmentObject(purchaseManager)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .preferredColorScheme(.dark)
             }
 
             // MARK: - App Update Check
@@ -441,6 +452,98 @@ struct GamesListView: View {
 
         return "Hi, \(trimmedName) 👋"
 
+    }
+
+    // MARK: - Premium Bundle
+
+    private var shouldShowBundleOffer: Bool {
+        !purchaseManager.ownsLifetimePass &&
+        purchaseManager.lifetimePassProduct != nil
+    }
+
+    private var bundleOfferBanner: some View {
+        Button {
+            isLifetimePassPresented = true
+        } label: {
+            HStack(spacing: 13) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .fill(Color.white.opacity(0.095))
+                        .frame(width: 52, height: 52)
+
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                        .frame(width: 52, height: 52)
+
+                    Image(systemName: "infinity")
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.cyan, .white, .pink.opacity(0.92)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 7) {
+                        Text("LIFETIME PASS")
+                            .font(.system(size: 9, weight: .black, design: .rounded))
+                            .tracking(0.8)
+                            .foregroundStyle(Color.cyan.opacity(0.95))
+
+                        Text("ONE PAYMENT")
+                            .font(.system(size: 8, weight: .black, design: .rounded))
+                            .tracking(0.5)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .frame(height: 17)
+                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                    }
+
+                    Text("All games now + future releases")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
+
+                Spacer(minLength: 4)
+
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(purchaseManager.lifetimePassDisplayPrice ?? "")
+                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.52))
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity)
+            .frame(height: 76)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.025, green: 0.38, blue: 0.68),
+                        Color(red: 0.38, green: 0.16, blue: 0.78),
+                        Color(red: 0.68, green: 0.16, blue: 0.62)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: Color.purple.opacity(0.28), radius: 14, y: 6)
+        }
+        .buttonStyle(.plain)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     // MARK: - Filters

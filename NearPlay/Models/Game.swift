@@ -119,7 +119,7 @@ extension Game {
             .local,
             .computer
         ],
-        productID: "com.nearplay.numberrush"
+        productID: PurchaseCatalog.numberRush
     )
 
 
@@ -187,7 +187,8 @@ extension Game {
         supportedModes: [.nearby, .local, .computer],
         badge: .new,
         isPopular: true,
-        displayPriority: 60
+        displayPriority: 60,
+        productID: PurchaseCatalog.dotsAndBoxes
     )
 
     static let ricochet = Game(
@@ -202,7 +203,8 @@ extension Game {
         supportedModes: [.nearby],
         badge: .new,
         isPopular: true,
-        displayPriority: 100
+        displayPriority: 100,
+        productID: PurchaseCatalog.ricochet
     )
 
     static let tiltRace = Game(
@@ -217,7 +219,8 @@ extension Game {
         supportedModes: [.nearby],
         badge: .new,
         isPopular: true,
-        displayPriority: 90
+        displayPriority: 90,
+        productID: PurchaseCatalog.tiltRace
     )
 
     static let laserDuel = Game(
@@ -232,7 +235,8 @@ extension Game {
         supportedModes: [.nearby],
         badge: .new,
         isPopular: true,
-        displayPriority: 95
+        displayPriority: 95,
+        productID: PurchaseCatalog.laserDuel
     )
 
     static let all: [Game] = [

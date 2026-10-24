@@ -28,6 +28,81 @@
       "productID" : "com.nearplay.numberrush",
       "referenceName" : "Number Rush Unlock",
       "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "E064EEB1",
+      "localizations" : [
+        {
+          "description" : "Unlock Dots & Boxes permanently.",
+          "displayName" : "Dots & Boxes",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.nearplay.dotsandboxes",
+      "referenceName" : "Dots & Boxes Unlock",
+      "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "A10D76A8",
+      "localizations" : [
+        {
+          "description" : "Unlock Ricochet permanently.",
+          "displayName" : "Ricochet",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.nearplay.ricochet",
+      "referenceName" : "Ricochet Unlock",
+      "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "70E98D56",
+      "localizations" : [
+        {
+          "description" : "Unlock Tilt Race permanently.",
+          "displayName" : "Tilt Race",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.nearplay.tiltrace",
+      "referenceName" : "Tilt Race Unlock",
+      "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "9446B0D4",
+      "localizations" : [
+        {
+          "description" : "Unlock Laser Duel permanently.",
+          "displayName" : "Laser Duel",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.nearplay.laserduel",
+      "referenceName" : "Laser Duel Unlock",
+      "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "AB93066B",
+      "localizations" : [
+        {
+          "description" : "All premium games, now and in the future.",
+          "displayName" : "NearPlay Lifetime Pass",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.nearplay.allgames",
+      "referenceName" : "NearPlay Lifetime Pass",
+      "type" : "NonConsumable"
     }
   ],
   "settings" : {
