@@ -11,6 +11,7 @@ struct TiltRaceView: View {
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var motion = TiltRaceMotionController()
+    @StateObject private var rematchController: RematchController
     @State private var state: TiltRaceMatchState
     @State private var ballX = 0.5
     @State private var ballY = 0.91
@@ -26,6 +27,8 @@ struct TiltRaceView: View {
     @State private var showQuit = false
     @State private var showResult = false
     @State private var isQuitting = false
+    @State private var sessionScore = GameSessionScore()
+    @State private var scoreRoundNumber = 1
 
     private let frameTimer = Timer.publish(
         every: 1.0 / 60.0,
@@ -52,6 +55,14 @@ struct TiltRaceView: View {
         prepared.progress[startPayload.playerTwoID] =
             prepared.progress[startPayload.playerTwoID] ?? 0
         _state = State(initialValue: prepared)
+        _rematchController = StateObject(wrappedValue: RematchController(
+            gameID: game.id,
+            sessionID: startPayload.sessionID,
+            localPlayerID: nearbyService.localPlayerID,
+            localPlayerName: localPlayerName,
+            hostPlayerID: nearbyService.lobbySession?.hostPlayerID ?? startPayload.playerOneID,
+            nearbyService: nearbyService
+        ))
     }
 
     var body: some View {
@@ -107,9 +118,29 @@ struct TiltRaceView: View {
             UINotificationFeedbackGenerator().notificationOccurred(
                 winner == localPlayerID ? .success : .warning
             )
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
-                showResult = true
+        }
+        .onChange(of: rematchController.confirmedRoundNumber) { _, confirmedRound in
+            guard let confirmedRound else { return }
+            scoreRoundNumber = confirmedRound
+            showResult = false
+
+            if isHost {
+                state = TiltRaceGame.makeInitialState(
+                    playerOneID: startPayload.playerOneID,
+                    playerTwoID: startPayload.playerTwoID
+                )
+                handledEvents.removeAll()
+                broadcastState()
             }
+            rematchController.finishStartingRound()
+        }
+        .task(id: state.isFinished) {
+            showResult = false
+            guard state.isFinished else { return }
+            sessionScore.record(localResult: localRoundResult, roundNumber: scoreRoundNumber)
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled, state.isFinished else { return }
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { showResult = true }
         }
     }
 
@@ -508,6 +539,7 @@ struct TiltRaceView: View {
 
     private func handleIncoming(_ message: NearbyMessage?) {
         guard let message, message.gameID == game.id else { return }
+        if rematchController.handleIncoming(message) { return }
 
         switch message.type {
         case .gameAction:
@@ -532,9 +564,6 @@ struct TiltRaceView: View {
             }
             state = incoming
 
-        case .rematch:
-            handleReset(message)
-
         case .gameQuit:
             opponentQuit()
 
@@ -555,40 +584,6 @@ struct TiltRaceView: View {
             type: .gameState,
             payload: data
         ))
-    }
-
-    private func requestRematch() {
-        showResult = false
-        if isHost {
-            resetMatch()
-        } else {
-            let payload = TiltRaceResetPayload(sessionID: startPayload.sessionID)
-            guard let data = try? JSONEncoder().encode(payload) else { return }
-            nearbyService.send(.init(
-                gameID: game.id,
-                senderName: localPlayerName,
-                type: .rematch,
-                payload: data
-            ))
-        }
-    }
-
-    private func handleReset(_ message: NearbyMessage) {
-        guard isHost,
-              let data = message.payload,
-              let payload = try? JSONDecoder().decode(TiltRaceResetPayload.self, from: data),
-              payload.sessionID == startPayload.sessionID else { return }
-        resetMatch()
-    }
-
-    private func resetMatch() {
-        state = TiltRaceGame.makeInitialState(
-            playerOneID: startPayload.playerOneID,
-            playerTwoID: startPayload.playerTwoID
-        )
-        handledEvents.removeAll()
-        showResult = false
-        broadcastState()
     }
 
     private func resetLocalBall() {
@@ -629,53 +624,19 @@ struct TiltRaceView: View {
     }
 
     private var resultOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.82).ignoresSafeArea()
-
-            VStack(spacing: 18) {
-                Image(systemName: didLocalPlayerWin ? "trophy.fill" : "flag.checkered")
-                    .font(.system(size: 45, weight: .bold))
-                    .foregroundStyle(didLocalPlayerWin ? localColor : opponentColor)
-
-                Text(didLocalPlayerWin ? "You Win!" : "\(opponentName) Wins")
-                    .font(.system(size: 29, weight: .black, design: .rounded))
-
-                Text("All ten gates cleared.")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-
-                Button(action: requestRematch) {
-                    Label("Race Again", systemImage: "arrow.clockwise")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(
-                            RoundedRectangle(cornerRadius: 17)
-                                .fill(LinearGradient(
-                                    colors: [localColor, TiltRaceTheme.violet],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ))
-                        )
-                        .foregroundStyle(Color.black.opacity(0.8))
-                }
-                .buttonStyle(.plain)
-
-                Button("Quit", action: quitGame)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white.opacity(0.62))
-                    .frame(height: 35)
-            }
-            .padding(27)
-            .frame(maxWidth: 350)
-            .background(
-                RoundedRectangle(cornerRadius: 28)
-                    .fill(Color(red: 0.04, green: 0.065, blue: 0.085))
-            )
-            .overlay(RoundedRectangle(cornerRadius: 28).stroke(.white.opacity(0.12)))
-            .padding(24)
-        }
-        .foregroundStyle(.white)
+        GameResultOverlay(
+            result: localRoundResult,
+            title: didLocalPlayerWin ? "You Win!" : "\(opponentName) Wins",
+            subtitle: "All ten gates were cleared.",
+            symbolName: didLocalPlayerWin ? "trophy.fill" : "flag.checkered",
+            accentColor: didLocalPlayerWin ? localColor : opponentColor,
+            firstPlayerName: localPlayerName,
+            secondPlayerName: opponentName,
+            sessionScore: sessionScore,
+            rematchState: rematchController.state,
+            onPrimaryAction: rematchController.performPrimaryAction,
+            onQuit: quitGame
+        )
     }
 
     private func progressFraction(_ progress: Int) -> Double {
@@ -691,6 +652,7 @@ struct TiltRaceView: View {
         String(max(1, Int(ceil(state.startsAt.timeIntervalSince(now)))))
     }
     private var didLocalPlayerWin: Bool { state.winnerPlayerID == localPlayerID }
+    private var localRoundResult: GameRoundResult { didLocalPlayerWin ? .win : .loss }
     private var localPlayerID: String { nearbyService.localPlayerID }
     private var opponentID: String {
         localPlayerID == startPayload.playerOneID

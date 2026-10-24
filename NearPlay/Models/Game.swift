@@ -220,10 +220,26 @@ extension Game {
         displayPriority: 90
     )
 
+    static let laserDuel = Game(
+        id: "laser_duel",
+        title: "Laser Duel",
+        shortDescription: "Tilt, fire, and dodge lasers crossing between two screens.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_laser_duel",
+        fallbackSystemImage: "scope",
+        accentHex: "#FF365F",
+        supportedModes: [.nearby],
+        badge: .new,
+        isPopular: true,
+        displayPriority: 95
+    )
+
     static let all: [Game] = [
         ticTacToe,
         ricochet,
         tiltRace,
+        laserDuel,
         dotsAndBoxes,
         backgammon,
         numberRush,

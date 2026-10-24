@@ -63,6 +63,9 @@ struct GameLobbyView: View {
     // Tilt Race
     @State private var tiltRaceStartPayload: TiltRaceStartPayload?
 
+    // Laser Duel
+    @State private var laserDuelStartPayload: LaserDuelStartPayload?
+
     init(
         game: Game,
         onExitToHome: (() -> Void)? = nil
@@ -89,7 +92,8 @@ struct GameLobbyView: View {
         game.id == Game.backgammon.id ||
         game.id == Game.dotsAndBoxes.id ||
         game.id == Game.ricochet.id ||
-        game.id == Game.tiltRace.id
+        game.id == Game.tiltRace.id ||
+        game.id == Game.laserDuel.id
     }
 
     private var hasRequiredNearbyPermissions: Bool {
@@ -979,6 +983,9 @@ struct GameLobbyView: View {
         case Game.tiltRace.id:
             startTiltRace()
 
+        case Game.laserDuel.id:
+            startLaserDuel()
+
         default:
             isStartingGame = false
         }
@@ -1297,6 +1304,42 @@ struct GameLobbyView: View {
         }
     }
 
+    private func startLaserDuel() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+
+        let payload = LaserDuelStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState: LaserDuelGame.makeInitialState(
+                playerOneID: nearbyService.localPlayerID,
+                playerTwoID: firstPeer.id
+            )
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+            nearbyService.send(NearbyMessage(
+                gameID: game.id,
+                senderName: safePlayerName,
+                type: .gameStart,
+                payload: data
+            ))
+            laserDuelStartPayload = payload
+            shouldStartGame = true
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage = "Failed to start Laser Duel."
+        }
+    }
+
     // MARK: - Received messages
 
     private func handleReceivedMessage(
@@ -1349,6 +1392,9 @@ struct GameLobbyView: View {
 
             case Game.tiltRace.id:
                 handleTiltRaceStart(data)
+
+            case Game.laserDuel.id:
+                handleLaserDuelStart(data)
 
             default:
                 break
@@ -1502,6 +1548,19 @@ struct GameLobbyView: View {
             shouldStartGame = true
         } catch {
             nearbyService.errorMessage = "Failed to start Tilt Race."
+        }
+    }
+
+    private func handleLaserDuelStart(_ data: Data) {
+        do {
+            laserDuelStartPayload = try JSONDecoder().decode(
+                LaserDuelStartPayload.self,
+                from: data
+            )
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Laser Duel."
         }
     }
 
@@ -1729,6 +1788,25 @@ struct GameLobbyView: View {
                     playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
                     playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
                     initialState: TiltRaceGame.makeInitialState(
+                        playerOneID: nearbyService.localPlayerID,
+                        playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer"
+                    )
+                ),
+                onExitToHome: exitToHome
+            )
+
+        case Game.laserDuel.id:
+            LaserDuelView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload: laserDuelStartPayload ?? LaserDuelStartPayload(
+                    sessionID: nearbyService.lobbySession?.sessionID ?? UUID().uuidString,
+                    playerOneID: nearbyService.localPlayerID,
+                    playerOneName: safePlayerName,
+                    playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
+                    playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
+                    initialState: LaserDuelGame.makeInitialState(
                         playerOneID: nearbyService.localPlayerID,
                         playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer"
                     )

@@ -34,10 +34,6 @@ struct TiltRaceStatePayload: Codable, Equatable {
     let state: TiltRaceMatchState
 }
 
-struct TiltRaceResetPayload: Codable, Equatable {
-    let sessionID: String
-}
-
 struct TiltRaceCheckpoint: Identifiable, Equatable {
     let id: Int
     let x: Double

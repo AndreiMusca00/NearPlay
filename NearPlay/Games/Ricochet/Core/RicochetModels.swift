@@ -52,10 +52,6 @@ struct RicochetStatePayload: Codable, Equatable {
     let state: RicochetMatchState
 }
 
-struct RicochetResetPayload: Codable, Equatable {
-    let sessionID: String
-}
-
 enum RicochetGame {
     static func makeInitialState(startingPlayerID: String) -> RicochetMatchState {
         RicochetMatchState(

@@ -11,6 +11,7 @@ struct RicochetView: View {
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var motion = RicochetMotionController()
+    @StateObject private var rematchController: RematchController
     @State private var state: RicochetMatchState
     @State private var ball: RicochetBall?
     @State private var trail: [CGPoint] = []
@@ -23,6 +24,8 @@ struct RicochetView: View {
     @State private var showQuit = false
     @State private var showResult = false
     @State private var isQuitting = false
+    @State private var sessionScore = GameSessionScore()
+    @State private var scoreRoundNumber = 1
 
     private let frameTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
     private let shieldY = 0.79
@@ -39,6 +42,14 @@ struct RicochetView: View {
         prepared.lives[startPayload.playerOneID] = prepared.lives[startPayload.playerOneID] ?? 3
         prepared.lives[startPayload.playerTwoID] = prepared.lives[startPayload.playerTwoID] ?? 3
         _state = State(initialValue: prepared)
+        _rematchController = StateObject(wrappedValue: RematchController(
+            gameID: game.id,
+            sessionID: startPayload.sessionID,
+            localPlayerID: nearbyService.localPlayerID,
+            localPlayerName: localPlayerName,
+            hostPlayerID: nearbyService.lobbySession?.hostPlayerID ?? startPayload.playerOneID,
+            nearbyService: nearbyService
+        ))
     }
 
     var body: some View {
@@ -83,6 +94,37 @@ struct RicochetView: View {
         }
         .onChange(of: state.winnerPlayerID) { _, winner in
             guard winner != nil else { showResult = false; return }
+            UINotificationFeedbackGenerator().notificationOccurred(
+                winner == localPlayerID ? .success : .warning
+            )
+        }
+        .onChange(of: rematchController.confirmedRoundNumber) { _, confirmedRound in
+            guard let confirmedRound else { return }
+            scoreRoundNumber = confirmedRound
+            showResult = false
+            ball = nil
+            trail.removeAll()
+            waitingForResolution = false
+
+            if isHost {
+                let starter = confirmedRound.isMultiple(of: 2)
+                    ? startPayload.playerTwoID
+                    : startPayload.playerOneID
+                var fresh = RicochetGame.makeInitialState(startingPlayerID: starter)
+                fresh.lives[startPayload.playerOneID] = 3
+                fresh.lives[startPayload.playerTwoID] = 3
+                state = fresh
+                handledEvents.removeAll()
+                broadcastState()
+            }
+            rematchController.finishStartingRound()
+        }
+        .task(id: state.isFinished) {
+            showResult = false
+            guard state.isFinished else { return }
+            sessionScore.record(localResult: localRoundResult, roundNumber: scoreRoundNumber)
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled, state.isFinished else { return }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) { showResult = true }
         }
     }
@@ -385,6 +427,7 @@ struct RicochetView: View {
 
     private func handleIncoming(_ message: NearbyMessage?) {
         guard let message, message.gameID == game.id else { return }
+        if rematchController.handleIncoming(message) { return }
         switch message.type {
         case .gameAction:
             guard let data = message.payload,
@@ -405,7 +448,6 @@ struct RicochetView: View {
                   let payload = try? JSONDecoder().decode(RicochetStatePayload.self, from: data),
                   payload.sessionID == startPayload.sessionID else { return }
             state = payload.state
-        case .rematch: handleReset(message)
         case .gameQuit: opponentQuit()
         default: break
         }
@@ -427,29 +469,6 @@ struct RicochetView: View {
         nearbyService.send(.init(gameID: game.id, senderName: localPlayerName, type: .gameState, payload: data))
     }
 
-    private func requestRematch() {
-        showResult = false
-        if isHost { resetMatch() }
-        else {
-            let payload = RicochetResetPayload(sessionID: startPayload.sessionID)
-            guard let data = try? JSONEncoder().encode(payload) else { return }
-            nearbyService.send(.init(gameID: game.id, senderName: localPlayerName, type: .rematch, payload: data))
-        }
-    }
-
-    private func handleReset(_ message: NearbyMessage) {
-        guard isHost, let data = message.payload,
-              let payload = try? JSONDecoder().decode(RicochetResetPayload.self, from: data),
-              payload.sessionID == startPayload.sessionID else { return }
-        resetMatch()
-    }
-
-    private func resetMatch() {
-        var fresh = RicochetGame.makeInitialState(startingPlayerID: state.winnerPlayerID ?? startPayload.playerOneID)
-        fresh.lives[startPayload.playerOneID] = 3; fresh.lives[startPayload.playerTwoID] = 3
-        state = fresh; showResult = false; broadcastState()
-    }
-
     private func quitGame() {
         guard !isQuitting else { return }; isQuitting = true
         nearbyService.send(.init(gameID: game.id, senderName: localPlayerName, type: .gameQuit))
@@ -461,25 +480,23 @@ struct RicochetView: View {
     private func opponentQuit() { motion.stop(); nearbyService.stop(); dismiss(); onExitToHome() }
 
     private var resultOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.80).ignoresSafeArea()
-            VStack(spacing: 18) {
-                Image(systemName: state.winnerPlayerID == localPlayerID ? "bolt.shield.fill" : "shield.slash.fill")
-                    .font(.system(size: 43, weight: .bold)).foregroundStyle(state.winnerPlayerID == localPlayerID ? localColor : opponentColor)
-                Text(state.winnerPlayerID == localPlayerID ? "You Win!" : "\(opponentName) Wins")
-                    .font(.system(size: 29, weight: .black, design: .rounded))
-                Text("Three breaches end the link.").font(.system(size: 14, weight: .medium)).foregroundStyle(.white.opacity(0.5))
-                Button(action: requestRematch) {
-                    Label("Play Again", systemImage: "arrow.clockwise").font(.system(size: 16, weight: .bold, design: .rounded))
-                        .frame(maxWidth: .infinity).frame(height: 52)
-                        .background(RoundedRectangle(cornerRadius: 17).fill(LinearGradient(colors: [localColor, opponentColor], startPoint: .leading, endPoint: .trailing)))
-                }.buttonStyle(.plain)
-                Button("Quit", action: quitGame).buttonStyle(.plain).foregroundStyle(.white.opacity(0.62)).frame(height: 35)
-            }
-            .padding(27).frame(maxWidth: 350)
-            .background(RoundedRectangle(cornerRadius: 28).fill(Color(red: 0.045, green: 0.055, blue: 0.105)))
-            .overlay(RoundedRectangle(cornerRadius: 28).stroke(.white.opacity(0.12))).padding(24)
-        }.foregroundStyle(.white)
+        GameResultOverlay(
+            result: localRoundResult,
+            title: localRoundResult == .win ? "You Win!" : "\(opponentName) Wins",
+            subtitle: "Three breaches ended the link.",
+            symbolName: localRoundResult == .win ? "bolt.shield.fill" : "shield.slash.fill",
+            accentColor: localRoundResult == .win ? localColor : opponentColor,
+            firstPlayerName: localPlayerName,
+            secondPlayerName: opponentName,
+            sessionScore: sessionScore,
+            rematchState: rematchController.state,
+            onPrimaryAction: rematchController.performPrimaryAction,
+            onQuit: quitGame
+        )
+    }
+
+    private var localRoundResult: GameRoundResult {
+        state.winnerPlayerID == localPlayerID ? .win : .loss
     }
 
     private var shieldX: Double { usesTouchControl || !motion.isAvailable ? manualShieldX : motion.position }

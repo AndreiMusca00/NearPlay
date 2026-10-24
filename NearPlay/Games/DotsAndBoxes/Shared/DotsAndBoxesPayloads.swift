@@ -21,8 +21,3 @@ struct DotsAndBoxesStatePayload: Codable, Equatable {
     let roundNumber: Int
     let state: DotsAndBoxesGameState
 }
-
-struct DotsAndBoxesResetPayload: Codable, Equatable {
-    let sessionID: String
-    let requestedRoundNumber: Int
-}
