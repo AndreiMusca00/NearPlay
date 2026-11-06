@@ -231,11 +231,6 @@ struct NumberRushLocalView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                "Time expired — turn switched",
-                tone: .neutral
-            )
-
             scheduleTimeout()
         }
 

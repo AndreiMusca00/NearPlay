@@ -9,7 +9,7 @@ struct BackgammonView: View {
 
     let localPlayerName: String
     let startPayload: BackgammonStartPayload
-    let onExitToHome: () -> Void
+    let onExitToHome: (NearbyGameExitReason) -> Void
 
     @Environment(\.dismiss)
     private var dismiss
@@ -43,7 +43,7 @@ struct BackgammonView: View {
         nearbyService: NearbyService,
         localPlayerName: String,
         startPayload: BackgammonStartPayload,
-        onExitToHome: @escaping () -> Void = {}
+        onExitToHome: @escaping (NearbyGameExitReason) -> Void = { _ in }
     ) {
         self.game = game
         self.nearbyService = nearbyService
@@ -704,20 +704,14 @@ struct BackgammonView: View {
             deadline: .now() + 0.35
         ) {
             nearbyService.stop()
-            OrientationManager.shared.transition(to: .portrait) {
-                dismiss()
-                onExitToHome()
-                isQuitting = false
-            }
+            onExitToHome(.localPlayerQuit)
+            isQuitting = false
         }
     }
 
     private func handleOpponentQuit() {
         nearbyService.stop()
-        OrientationManager.shared.transition(to: .portrait) {
-            dismiss()
-            onExitToHome()
-        }
+        onExitToHome(.opponentQuit(playerName: opponentName))
     }
 
     private var quittingOverlay: some View {

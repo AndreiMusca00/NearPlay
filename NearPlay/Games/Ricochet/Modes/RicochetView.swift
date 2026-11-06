@@ -7,7 +7,7 @@ struct RicochetView: View {
     @ObservedObject var nearbyService: NearbyService
     let localPlayerName: String
     let startPayload: RicochetStartPayload
-    let onExitToHome: () -> Void
+    let onExitToHome: (NearbyGameExitReason) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var motion = RicochetMotionController()
@@ -37,7 +37,7 @@ struct RicochetView: View {
     private let shieldHalfWidth = 0.15
 
     init(game: Game, nearbyService: NearbyService, localPlayerName: String,
-         startPayload: RicochetStartPayload, onExitToHome: @escaping () -> Void = {}) {
+         startPayload: RicochetStartPayload, onExitToHome: @escaping (NearbyGameExitReason) -> Void = { _ in }) {
         self.game = game
         self.nearbyService = nearbyService
         self.localPlayerName = localPlayerName
@@ -809,11 +809,11 @@ struct RicochetView: View {
         guard !isQuitting else { return }; isQuitting = true
         nearbyService.send(.init(gameID: game.id, senderName: localPlayerName, type: .gameQuit))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            motion.stop(); nearbyService.stop(); dismiss(); onExitToHome(); isQuitting = false
+            motion.stop(); nearbyService.stop(); onExitToHome(.localPlayerQuit); isQuitting = false
         }
     }
 
-    private func opponentQuit() { motion.stop(); nearbyService.stop(); dismiss(); onExitToHome() }
+    private func opponentQuit() { motion.stop(); nearbyService.stop(); onExitToHome(.opponentQuit(playerName: opponentName)) }
 
     private var resultOverlay: some View {
         GameResultOverlay(

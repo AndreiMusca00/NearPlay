@@ -9,7 +9,7 @@ struct NumberRushView: View {
 
     let localPlayerName: String
     let startPayload: NumberRushStartPayload
-    let onExitToHome: () -> Void
+    let onExitToHome: (NearbyGameExitReason) -> Void
 
     @Environment(\.dismiss)
     private var dismiss
@@ -40,7 +40,7 @@ struct NumberRushView: View {
         nearbyService: NearbyService,
         localPlayerName: String,
         startPayload: NumberRushStartPayload,
-        onExitToHome: @escaping () -> Void = {}
+        onExitToHome: @escaping (NearbyGameExitReason) -> Void = { _ in }
     ) {
         self.game = game
         self.nearbyService = nearbyService
@@ -391,10 +391,6 @@ struct NumberRushView: View {
                 .notificationOccurred(.warning)
 
             pendingSelection = false
-            showFeedback(
-                "Time expired — turn switched",
-                tone: .neutral
-            )
             broadcastAuthoritativeState()
             scheduleHostTimeout()
         }
@@ -601,8 +597,7 @@ struct NumberRushView: View {
             deadline: .now() + 0.4
         ) {
             nearbyService.stop()
-            dismiss()
-            onExitToHome()
+            onExitToHome(.localPlayerQuit)
             isQuitting = false
         }
     }
@@ -610,8 +605,7 @@ struct NumberRushView: View {
     private func handleOpponentQuit() {
         timeoutWorkItem?.cancel()
         nearbyService.stop()
-        dismiss()
-        onExitToHome()
+        onExitToHome(.opponentQuit(playerName: opponentName))
     }
 
     private var quittingOverlay: some View {

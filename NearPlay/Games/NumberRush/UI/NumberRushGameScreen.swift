@@ -301,6 +301,9 @@ struct NumberRushGameScreen: View {
 
         let isWrong = wrongNumber == number
         let isCorrect = correctNumber == number
+        let claimedColor = claimedColor(
+            for: controller.state.claimedNumberOwners[number]
+        )
 
         return Button {
             onNumberSelected(number)
@@ -314,7 +317,8 @@ struct NumberRushGameScreen: View {
                     cellBackground(
                         completed: isCompleted,
                         wrong: isWrong,
-                        correct: isCorrect
+                        correct: isCorrect,
+                        claimedColor: claimedColor
                     )
                 )
 
@@ -326,7 +330,8 @@ struct NumberRushGameScreen: View {
                     cellBorder(
                         completed: isCompleted,
                         wrong: isWrong,
-                        correct: isCorrect
+                        correct: isCorrect,
+                        claimedColor: claimedColor
                     ),
                     lineWidth:
                         isCompleted || isWrong || isCorrect
@@ -337,13 +342,12 @@ struct NumberRushGameScreen: View {
                 if isCompleted {
                     Circle()
                         .stroke(
-                            NumberRushTheme.primaryGradient,
+                            claimedColor,
                             lineWidth: 2
                         )
                         .padding(3)
                         .shadow(
-                            color:
-                                NumberRushTheme.blue.opacity(0.70),
+                            color: claimedColor.opacity(0.70),
                             radius: 5
                         )
                 }
@@ -496,7 +500,8 @@ struct NumberRushGameScreen: View {
     private func cellBackground(
         completed: Bool,
         wrong: Bool,
-        correct: Bool
+        correct: Bool,
+        claimedColor: Color
     ) -> Color {
         if wrong {
             return Color.red.opacity(0.16)
@@ -507,7 +512,7 @@ struct NumberRushGameScreen: View {
         }
 
         if completed {
-            return NumberRushTheme.blue.opacity(0.10)
+            return claimedColor.opacity(0.12)
         }
 
         return Color.white.opacity(0.028)
@@ -516,7 +521,8 @@ struct NumberRushGameScreen: View {
     private func cellBorder(
         completed: Bool,
         wrong: Bool,
-        correct: Bool
+        correct: Bool,
+        claimedColor: Color
     ) -> Color {
         if wrong {
             return Color.red.opacity(0.90)
@@ -527,7 +533,7 @@ struct NumberRushGameScreen: View {
         }
 
         if completed {
-            return NumberRushTheme.blue.opacity(0.72)
+            return claimedColor.opacity(0.76)
         }
 
         return Color.white.opacity(0.09)
@@ -546,5 +552,15 @@ struct NumberRushGameScreen: View {
         }
 
         return Color.white.opacity(0.88)
+    }
+
+    private func claimedColor(
+        for playerID: String?
+    ) -> Color {
+        if playerID == secondPlayer.id {
+            return NumberRushTheme.purple
+        }
+
+        return NumberRushTheme.blue
     }
 }

@@ -7,7 +7,7 @@ struct LaserDuelView: View {
     @ObservedObject var nearbyService: NearbyService
     let localPlayerName: String
     let startPayload: LaserDuelStartPayload
-    let onExitToHome: () -> Void
+    let onExitToHome: (NearbyGameExitReason) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var motion = LaserDuelMotionController()
@@ -54,7 +54,7 @@ struct LaserDuelView: View {
         nearbyService: NearbyService,
         localPlayerName: String,
         startPayload: LaserDuelStartPayload,
-        onExitToHome: @escaping () -> Void = {}
+        onExitToHome: @escaping (NearbyGameExitReason) -> Void = { _ in }
     ) {
         self.game = game
         self.nearbyService = nearbyService
@@ -419,9 +419,11 @@ struct LaserDuelView: View {
 
     private var countdownOverlay: some View {
         VStack(spacing: 8) {
-            Text(countdownText)
+            Text("\(countdownValue)")
                 .font(.system(size: 62, weight: .black, design: .rounded))
-                .contentTransition(.numericText())
+                .monospacedDigit()
+                .contentTransition(.numericText(countsDown: true))
+                .animation(.easeInOut(duration: 0.28), value: countdownValue)
                 .shadow(color: localColor, radius: 18)
             Text("WEAPONS ARMING")
                 .font(.system(size: 11, weight: .black, design: .rounded))
@@ -797,8 +799,7 @@ struct LaserDuelView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             motion.stop()
             nearbyService.stop()
-            dismiss()
-            onExitToHome()
+            onExitToHome(.localPlayerQuit)
             isQuitting = false
         }
     }
@@ -806,8 +807,7 @@ struct LaserDuelView: View {
     private func opponentQuit() {
         motion.stop()
         nearbyService.stop()
-        dismiss()
-        onExitToHome()
+        onExitToHome(.opponentQuit(playerName: opponentName))
     }
 
     private var shipX: Double {
@@ -824,8 +824,8 @@ struct LaserDuelView: View {
     }
 
     private var hasDuelStarted: Bool { now >= state.startsAt }
-    private var countdownText: String {
-        String(max(1, Int(ceil(state.startsAt.timeIntervalSince(now)))))
+    private var countdownValue: Int {
+        max(1, Int(ceil(state.startsAt.timeIntervalSince(now))))
     }
     private var didLocalPlayerWin: Bool { state.winnerPlayerID == localPlayerID }
     private var localRoundResult: GameRoundResult { didLocalPlayerWin ? .win : .loss }

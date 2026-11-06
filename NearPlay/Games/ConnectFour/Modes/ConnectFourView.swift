@@ -16,7 +16,7 @@ struct ConnectFourView: View {
 
     let localPlayerName: String
     let startPayload: ConnectFourStartPayload
-    let onExitToHome: () -> Void
+    let onExitToHome: (NearbyGameExitReason) -> Void
 
     @Environment(\.dismiss)
     private var dismiss
@@ -44,7 +44,7 @@ struct ConnectFourView: View {
         nearbyService: NearbyService,
         localPlayerName: String,
         startPayload: ConnectFourStartPayload,
-        onExitToHome: @escaping () -> Void = {}
+        onExitToHome: @escaping (NearbyGameExitReason) -> Void = { _ in }
     ) {
         self.game = game
         self.nearbyService = nearbyService
@@ -524,16 +524,14 @@ struct ConnectFourView: View {
             deadline: .now() + 0.35
         ) {
             nearbyService.stop()
-            dismiss()
-            onExitToHome()
+            onExitToHome(.localPlayerQuit)
             isQuitting = false
         }
     }
 
     private func handleOpponentQuit() {
         nearbyService.stop()
-        dismiss()
-        onExitToHome()
+        onExitToHome(.opponentQuit(playerName: opponentName))
     }
 
     private var quittingOverlay: some View {

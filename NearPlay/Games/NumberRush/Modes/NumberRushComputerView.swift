@@ -325,13 +325,6 @@ struct NumberRushComputerView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-            showFeedback(
-                activePlayerID == Self.humanID
-                ? "Time expired — computer's turn"
-                : "Computer ran out of time",
-                tone: .neutral
-            )
-
             scheduleAfterStateChange()
         }
 

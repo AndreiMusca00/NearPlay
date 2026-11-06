@@ -6,7 +6,7 @@ struct DotsAndBoxesView: View {
     @ObservedObject var nearbyService: NearbyService
     let localPlayerName: String
     let startPayload: DotsAndBoxesStartPayload
-    let onExitToHome: () -> Void
+    let onExitToHome: (NearbyGameExitReason) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var controller: DotsAndBoxesMatchController
@@ -21,7 +21,7 @@ struct DotsAndBoxesView: View {
     @State private var isQuitting = false
 
     init(game: Game, nearbyService: NearbyService, localPlayerName: String,
-         startPayload: DotsAndBoxesStartPayload, onExitToHome: @escaping () -> Void = {}) {
+         startPayload: DotsAndBoxesStartPayload, onExitToHome: @escaping (NearbyGameExitReason) -> Void = { _ in }) {
         self.game = game
         self.nearbyService = nearbyService
         self.localPlayerName = localPlayerName
@@ -150,10 +150,10 @@ struct DotsAndBoxesView: View {
         isQuitting = true
         nearbyService.send(.init(gameID: game.id, senderName: localPlayerName, type: .gameQuit))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            nearbyService.stop(); dismiss(); onExitToHome(); isQuitting = false
+            nearbyService.stop(); onExitToHome(.localPlayerQuit); isQuitting = false
         }
     }
-    private func opponentQuit() { nearbyService.stop(); dismiss(); onExitToHome() }
+    private func opponentQuit() { nearbyService.stop(); onExitToHome(.opponentQuit(playerName: opponentName)) }
 
     private var localPlayerID: String { nearbyService.localPlayerID }
     private var opponentID: String { localPlayerID == startPayload.playerOneID ? startPayload.playerTwoID : startPayload.playerOneID }

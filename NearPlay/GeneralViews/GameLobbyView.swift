@@ -26,6 +26,7 @@ struct GameLobbyView: View {
     @State private var isSearching = false
     @State private var shouldStartGame = false
     @State private var isStartingGame = false
+    @State private var isExitingToHome = false
 
     @State private var showNearbyPermissionAlert = false
     @State private var showNearPlaySettings = false
@@ -895,14 +896,7 @@ struct GameLobbyView: View {
 
         var remaining = max(seconds, 1)
 
-        withAnimation(
-            .spring(
-                response: 0.34,
-                dampingFraction: 0.78
-            )
-        ) {
-            countdownValue = remaining
-        }
+        countdownValue = remaining
 
         countdownTimer = Timer.scheduledTimer(
             withTimeInterval: 1,
@@ -914,9 +908,7 @@ struct GameLobbyView: View {
                 timer.invalidate()
                 countdownTimer = nil
 
-                withAnimation(.easeOut(duration: 0.18)) {
-                    countdownValue = 0
-                }
+                countdownValue = 0
 
                 if startsGameWhenFinished {
                     startSelectedGame()
@@ -927,14 +919,7 @@ struct GameLobbyView: View {
                 )
                 .impactOccurred()
 
-                withAnimation(
-                    .spring(
-                        response: 0.28,
-                        dampingFraction: 0.72
-                    )
-                ) {
-                    countdownValue = remaining
-                }
+                countdownValue = remaining
             }
         }
     }
@@ -1872,15 +1857,23 @@ struct GameLobbyView: View {
         dismiss()
     }
 
-    private func exitToHome() {
+    private func exitToHome(_ reason: NearbyGameExitReason) {
+        guard !isExitingToHome else { return }
+        isExitingToHome = true
         nearbyService.stop()
-        isStartingGame = false
-        shouldStartGame = false
+        OrientationManager.shared.transitionToHome(
+            opponentName: reason.opponentName
+        ) {
+            isStartingGame = false
 
-        if let onExitToHome {
-            onExitToHome()
-        } else {
-            dismiss()
+            if let onExitToHome {
+                // Resetting the root NavigationPath removes the game and lobby
+                // in one operation. Do not pop the game separately first.
+                onExitToHome()
+            } else {
+                shouldStartGame = false
+                dismiss()
+            }
         }
     }
 
@@ -1942,6 +1935,16 @@ private struct UnifiedLobbyDialogOverlay: View {
     let invitationDuration: TimeInterval
     let onAccept: () -> Void
     let onDecline: () -> Void
+
+    private var structuralAnimationKey: Int {
+        switch state {
+        case .incoming: 0
+        case .outgoing: 1
+        case .accepted: 2
+        case .countdown: 3
+        case .declined: 4
+        }
+    }
 
     private var title: String {
         switch state {
@@ -2104,7 +2107,7 @@ private struct UnifiedLobbyDialogOverlay: View {
                 response: 0.36,
                 dampingFraction: 0.84
             ),
-            value: state
+            value: structuralAnimationKey
         )
     }
 
@@ -2201,7 +2204,6 @@ private struct UnifiedLobbyDialogOverlay: View {
             )
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .contentTransition(.numericText())
 
         case .declined:
             HStack(spacing: 9) {
@@ -2411,7 +2413,14 @@ private struct CountdownDialogVisual: View {
                     .foregroundStyle(
                         LobbyTheme.primaryGradient
                     )
-                    .contentTransition(.numericText())
+                    .monospacedDigit()
+                    .contentTransition(
+                        .numericText(countsDown: true)
+                    )
+                    .animation(
+                        .easeInOut(duration: 0.28),
+                        value: value
+                    )
             } else {
                 ProgressView()
                     .tint(.white)

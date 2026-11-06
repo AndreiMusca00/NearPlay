@@ -7,7 +7,7 @@ struct TiltRaceView: View {
     @ObservedObject var nearbyService: NearbyService
     let localPlayerName: String
     let startPayload: TiltRaceStartPayload
-    let onExitToHome: () -> Void
+    let onExitToHome: (NearbyGameExitReason) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -42,7 +42,7 @@ struct TiltRaceView: View {
         nearbyService: NearbyService,
         localPlayerName: String,
         startPayload: TiltRaceStartPayload,
-        onExitToHome: @escaping () -> Void = {}
+        onExitToHome: @escaping (NearbyGameExitReason) -> Void = { _ in }
     ) {
         self.game = game
         self.nearbyService = nearbyService
@@ -409,11 +409,13 @@ struct TiltRaceView: View {
 
     private var countdownOverlay: some View {
         VStack(spacing: 9) {
-            Text(countdownText)
+            Text("\(countdownValue)")
                 .font(.system(size: 62, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
                 .shadow(color: localColor, radius: 18)
-                .contentTransition(.numericText())
+                .monospacedDigit()
+                .contentTransition(.numericText(countsDown: true))
+                .animation(.easeInOut(duration: 0.28), value: countdownValue)
             Text("HOLD STEADY")
                 .font(.system(size: 11, weight: .black, design: .rounded))
                 .tracking(1.8)
@@ -636,8 +638,7 @@ struct TiltRaceView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             motion.stop()
             nearbyService.stop()
-            dismiss()
-            onExitToHome()
+            onExitToHome(.localPlayerQuit)
             isQuitting = false
         }
     }
@@ -645,8 +646,7 @@ struct TiltRaceView: View {
     private func opponentQuit() {
         motion.stop()
         nearbyService.stop()
-        dismiss()
-        onExitToHome()
+        onExitToHome(.opponentQuit(playerName: opponentName))
     }
 
     private var resultOverlay: some View {
@@ -674,8 +674,8 @@ struct TiltRaceView: View {
     }
     private var localProgress: Int { state.progress(for: localPlayerID) }
     private var hasRaceStarted: Bool { now >= state.startsAt }
-    private var countdownText: String {
-        String(max(1, Int(ceil(state.startsAt.timeIntervalSince(now)))))
+    private var countdownValue: Int {
+        max(1, Int(ceil(state.startsAt.timeIntervalSince(now))))
     }
     private var didLocalPlayerWin: Bool { state.winnerPlayerID == localPlayerID }
     private var localRoundResult: GameRoundResult { didLocalPlayerWin ? .win : .loss }

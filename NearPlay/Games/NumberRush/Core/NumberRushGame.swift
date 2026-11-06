@@ -94,6 +94,7 @@ struct NumberRushGame: Sendable {
         state.scores[playerID, default: 0] += 1
 
         let selectedTarget = state.targetNumber
+        state.claimedNumberOwners[selectedTarget] = playerID
         state.targetNumber += 1
 
         if selectedTarget >= Self.finalTargetNumber {

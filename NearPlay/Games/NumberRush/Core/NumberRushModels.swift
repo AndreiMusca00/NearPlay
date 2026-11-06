@@ -4,6 +4,7 @@ struct NumberRushGameState: Codable, Equatable, Sendable {
     var shuffledNumbers: [Int]
     var targetNumber: Int
     var scores: [String: Int]
+    var claimedNumberOwners: [Int: String] = [:]
 
     var activePlayerID: String
     var turnID: UUID
@@ -28,6 +29,63 @@ struct NumberRushGameState: Codable, Equatable, Sendable {
         shuffledNumbers.filter {
             !completedNumbers.contains($0)
         }
+    }
+}
+
+extension NumberRushGameState {
+    private enum CodingKeys: String, CodingKey {
+        case shuffledNumbers
+        case targetNumber
+        case scores
+        case claimedNumberOwners
+        case activePlayerID
+        case turnID
+        case turnStartedAt
+        case turnDuration
+        case isFinished
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(
+            keyedBy: CodingKeys.self
+        )
+
+        shuffledNumbers = try container.decode(
+            [Int].self,
+            forKey: .shuffledNumbers
+        )
+        targetNumber = try container.decode(
+            Int.self,
+            forKey: .targetNumber
+        )
+        scores = try container.decode(
+            [String: Int].self,
+            forKey: .scores
+        )
+        claimedNumberOwners = try container.decodeIfPresent(
+            [Int: String].self,
+            forKey: .claimedNumberOwners
+        ) ?? [:]
+        activePlayerID = try container.decode(
+            String.self,
+            forKey: .activePlayerID
+        )
+        turnID = try container.decode(
+            UUID.self,
+            forKey: .turnID
+        )
+        turnStartedAt = try container.decode(
+            Date.self,
+            forKey: .turnStartedAt
+        )
+        turnDuration = try container.decode(
+            TimeInterval.self,
+            forKey: .turnDuration
+        )
+        isFinished = try container.decode(
+            Bool.self,
+            forKey: .isFinished
+        )
     }
 }
 

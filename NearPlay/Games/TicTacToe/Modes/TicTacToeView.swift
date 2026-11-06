@@ -9,7 +9,7 @@ struct TicTacToeView: View {
 
     let localPlayerName: String
     let startPayload: TicTacToeStartPayload
-    let onExitToHome: () -> Void
+    let onExitToHome: (NearbyGameExitReason) -> Void
 
     @Environment(\.dismiss)
     private var dismiss
@@ -35,7 +35,7 @@ struct TicTacToeView: View {
         nearbyService: NearbyService,
         localPlayerName: String,
         startPayload: TicTacToeStartPayload,
-        onExitToHome: @escaping () -> Void = {}
+        onExitToHome: @escaping (NearbyGameExitReason) -> Void = { _ in }
     ) {
         self.game = game
         self.nearbyService = nearbyService
@@ -499,16 +499,14 @@ struct TicTacToeView: View {
             deadline: .now() + 0.4
         ) {
             nearbyService.stop()
-            dismiss()
-            onExitToHome()
+            onExitToHome(.localPlayerQuit)
             isQuitting = false
         }
     }
 
     private func handleOpponentQuit() {
         nearbyService.stop()
-        dismiss()
-        onExitToHome()
+        onExitToHome(.opponentQuit(playerName: opponentName))
     }
 
     private var quittingOverlay: some View {
