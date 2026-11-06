@@ -271,13 +271,17 @@ struct TiltRaceView: View {
                         endPoint: .bottom
                     ))
 
-                trackPath(in: proxy.size)
-
-                ForEach(checkpoints) { checkpoint in
+                ForEach(visibleCheckpoints) { checkpoint in
                     checkpointView(checkpoint)
                         .position(
                             x: proxy.size.width * checkpoint.x,
                             y: proxy.size.height * checkpoint.y
+                        )
+                        .transition(
+                            .asymmetric(
+                                insertion: .scale(scale: 0.62).combined(with: .opacity),
+                                removal: .scale(scale: 1.32).combined(with: .opacity)
+                            )
                         )
                 }
 
@@ -304,6 +308,10 @@ struct TiltRaceView: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 27))
+            .animation(
+                .spring(response: 0.36, dampingFraction: 0.72),
+                value: localProgress
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 27)
                     .stroke(localColor.opacity(0.24), lineWidth: 1.2)
@@ -320,28 +328,6 @@ struct TiltRaceView: View {
             )
         }
         .frame(minHeight: 360)
-    }
-
-    private func trackPath(in size: CGSize) -> some View {
-        Canvas { context, _ in
-            var path = Path()
-            path.move(to: CGPoint(x: size.width * 0.5, y: size.height * 0.91))
-            for checkpoint in checkpoints {
-                path.addLine(to: CGPoint(
-                    x: size.width * checkpoint.x,
-                    y: size.height * checkpoint.y
-                ))
-            }
-            context.stroke(
-                path,
-                with: .linearGradient(
-                    Gradient(colors: [localColor.opacity(0.12), opponentColor.opacity(0.28)]),
-                    startPoint: .zero,
-                    endPoint: CGPoint(x: size.width, y: 0)
-                ),
-                style: StrokeStyle(lineWidth: 2, dash: [6, 8])
-            )
-        }
     }
 
     private func checkpointView(_ checkpoint: TiltRaceCheckpoint) -> some View {
@@ -671,6 +657,10 @@ struct TiltRaceView: View {
 
     private var checkpoints: [TiltRaceCheckpoint] {
         TiltRaceGame.checkpoints(for: state.trackSeed)
+    }
+    private var visibleCheckpoints: [TiltRaceCheckpoint] {
+        guard localProgress < checkpoints.count else { return [] }
+        return [checkpoints[localProgress]]
     }
     private var localProgress: Int { state.progress(for: localPlayerID) }
     private var hasRaceStarted: Bool { now >= state.startsAt }

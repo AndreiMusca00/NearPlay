@@ -216,7 +216,7 @@ extension Game {
         imageName: "game_tilt_race",
         fallbackSystemImage: "circle.circle.fill",
         accentHex: "#9DFF2E",
-        supportedModes: [.nearby],
+        supportedModes: [.nearby, .local],
         badge: .new,
         isPopular: true,
         displayPriority: 90,

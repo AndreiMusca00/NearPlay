@@ -160,7 +160,10 @@ struct GameEntryView: View {
 
         case Game.dotsAndBoxes.id:
             DotsAndBoxesLocalView(game: game)
-            
+
+        case Game.tiltRace.id:
+            TiltRaceLocalView(game: game)
+
         default:
             unavailableDestination(
                 title: "Two Players"

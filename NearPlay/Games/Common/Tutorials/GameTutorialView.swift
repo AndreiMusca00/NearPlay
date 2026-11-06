@@ -258,13 +258,13 @@ private struct GameTutorialDescriptor {
                     GameTutorialPage(
                         title: "Follow the numbers",
                         subtitle:
-                            "Guide the orb through the glowing gates in order. The next gate is always highlighted.",
+                            "Guide the orb into the glowing gate. Once you reach it, it disappears and the next numbered gate is revealed.",
                         artwork: .tiltRace(1)
                     ),
                     GameTutorialPage(
                         title: "Clear all ten",
                         subtitle:
-                            "Both players race at the same time on their own screens. First through gate ten wins.",
+                            "Race live on two iPhones, or take turns on the same track and compare times. First through gate ten — or the fastest time — wins.",
                         artwork: .tiltRace(2)
                     )
                 ]

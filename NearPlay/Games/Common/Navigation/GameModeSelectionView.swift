@@ -69,9 +69,11 @@ struct GameModeSelectionView: View {
                             action: onLocal
                         )
 
-                        computerCard(
-                            compact: compact
-                        )
+                        if game.id != Game.tiltRace.id {
+                            computerCard(
+                                compact: compact
+                            )
+                        }
                     }
 
                     Spacer(minLength: 0)
@@ -664,7 +666,7 @@ struct GameModeSelectionView: View {
         let availableCount =
             game.supportedModes.count
 
-        if availableCount == 3 {
+        if availableCount >= 2 {
             return "Choose the way you want to play this round."
         }
 
