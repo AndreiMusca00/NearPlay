@@ -808,366 +808,242 @@ struct GamesListView: View {
 
     private var gamesList: some View {
 
-        LazyVStack(spacing: 0) {
+        LazyVGrid(
 
-            ForEach(
+            columns: [
 
-                Array(filteredGames.enumerated()),
+                GridItem(.flexible(), spacing: 11),
 
-                id: \.element.id
+                GridItem(.flexible(), spacing: 11)
 
-            ) { index, game in
+            ],
 
-                gameRow(game)
+            spacing: 11
 
-                if index < filteredGames.count - 1 {
+        ) {
 
-                    Divider()
+            ForEach(filteredGames) { game in
 
-                        .overlay(
-
-                            Color.white.opacity(0.07)
-
-                        )
-
-                        .padding(.leading, 82)
-
-                        .padding(.trailing, 16)
-
-                }
+                compactGameCard(game)
 
             }
 
         }
 
+        .padding(.horizontal, 16)
+
+        .padding(.top, 14)
+
     }
 
-    private func gameRow(_ game: Game) -> some View {
-
-        HStack(spacing: 8) {
-
+    private func compactGameCard(_ game: Game) -> some View {
+        ZStack(alignment: .topTrailing) {
             Group {
-
                 if purchaseManager.isUnlocked(game) {
-
                     NavigationLink(value: game) {
-
-                        gameMainContent(game)
-
+                        compactGameCardContent(game)
                     }
-
                 } else {
-
                     Button {
-
                         selectedGameForPurchase = game
-
                     } label: {
-
-                        gameMainContent(game)
-
+                        compactGameCardContent(game)
                     }
-
                 }
-
             }
-
             .buttonStyle(.plain)
 
-            Button {
-
-                toggleFavorite(game)
-
-            } label: {
-
-                Image(
-
-                    systemName: isFavorite(game)
-
-                        ? "heart.fill"
-
-                        : "heart"
-
-                )
-
-                .font(
-
-                    .system(
-
-                        size: 19,
-
-                        weight: .medium
-
-                    )
-
-                )
-
-                .foregroundStyle(
-
-                    isFavorite(game)
-
-                        ? Color(
-
-                            red: 0.35,
-
-                            green: 0.66,
-
-                            blue: 1.00
-
-                        )
-
-                        : Color.white.opacity(0.45)
-
-                )
-
-                .frame(width: 36, height: 36)
-
-                .contentShape(Rectangle())
-
-            }
-
-            .buttonStyle(.plain)
-
-            .accessibilityLabel(
-
-                isFavorite(game)
-
-                    ? "Remove from liked games"
-
-                    : "Add to liked games"
-
-            )
-
-            accessIndicator(for: game)
-
+            compactFavoriteButton(game)
+                .padding(10)
         }
-
-        .padding(.leading, 16)
-
-        .padding(.trailing, 14)
-
-        .padding(.vertical, 8)
-
     }
 
-    private func gameMainContent(_ game: Game) -> some View {
-
-        HStack(spacing: 12) {
+    private func compactGameCardContent(
+        _ game: Game
+    ) -> some View {
+        VStack(spacing: 13) {
+            Spacer(minLength: 6)
 
             GameIconView(
-
                 game: game,
-
-                size: 54,
-
-                cornerRadius: 15,
-
-                symbolSize: 22
-
+                size: 72,
+                cornerRadius: 21,
+                symbolSize: 29
             )
 
-            VStack(
-
-                alignment: .leading,
-
-                spacing: 4
-
-            ) {
-
-                HStack(spacing: 7) {
-
-                    Text(game.title)
-
-                        .font(
-
-                            .system(
-
-                                size: 17,
-
-                                weight: .semibold
-
-                            )
-
-                        )
-
-                        .foregroundStyle(.white)
-
-                        .lineLimit(1)
-
-                    if let badge = game.badge {
-
-                        gameBadge(badge, color: game.accentColor)
-
-                    }
-
-                }
-
-                Text(playerText(for: game))
-
-                    .font(.system(size: 13))
-
-                    .foregroundStyle(
-
-                        Color.white.opacity(0.5)
-
-                    )
-
-            }
-
-            Spacer()
-
-        }
-
-        .contentShape(Rectangle())
-
-    }
-
-    private func gameBadge(
-
-        _ badge: GameBadge,
-
-        color: Color
-
-    ) -> some View {
-
-        Text(badge.rawValue)
-
-            .font(.system(size: 9, weight: .black, design: .rounded))
-
-            .tracking(0.7)
-
-            .foregroundStyle(color)
-
-            .padding(.horizontal, 7)
-
-            .frame(height: 19)
-
-            .background(
-
-                Capsule()
-
-                    .fill(color.opacity(0.13))
-
-            )
-
-            .overlay(
-
-                Capsule()
-
-                    .stroke(color.opacity(0.38), lineWidth: 1)
-
-            )
-
-            .fixedSize()
-
-    }
-
-    @ViewBuilder
-
-    private func accessIndicator(
-
-        for game: Game
-
-    ) -> some View {
-
-        if purchaseManager.isUnlocked(game) {
-
-            Image(systemName: "chevron.right")
-
+            Text(game.title)
                 .font(
-
                     .system(
-
-                        size: 15,
-
-                        weight: .semibold
-
+                        size: 16,
+                        weight: .bold,
+                        design: .rounded
                     )
-
                 )
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .frame(maxWidth: .infinity)
 
-                .foregroundStyle(
-
-                    Color.white.opacity(0.3)
-
-                )
-
-        } else {
-
-            VStack(
-
-                alignment: .trailing,
-
-                spacing: 4
-
-            ) {
-
-                if let price =
-
-                    purchaseManager.displayPrice(for: game) {
-
-                    Text(price)
-
-                        .font(
-
-                            .system(
-
-                                size: 12,
-
-                                weight: .semibold
-
-                            )
-
-                        )
-
-                        .foregroundStyle(
-
-                            Color.white.opacity(0.62)
-
-                        )
-
+            HStack(spacing: 6) {
+                ForEach(orderedModes(for: game)) { mode in
+                    compactModeBadge(
+                        mode,
+                        accent: game.accentColor
+                    )
                 }
-
-                Image(systemName: "lock.fill")
-
-                    .font(
-
-                        .system(
-
-                            size: 13,
-
-                            weight: .semibold
-
-                        )
-
-                    )
-
-                    .foregroundStyle(
-
-                        Color.white.opacity(0.34)
-
-                    )
-
             }
+            .frame(maxWidth: .infinity)
 
-            .frame(
-
-                minWidth: 34,
-
-                alignment: .trailing
-
-            )
-
+            Spacer(minLength: 5)
         }
-
+        .padding(.horizontal, 13)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, minHeight: 188)
+        .background {
+            compactCardBackground(game)
+        }
+        .contentShape(
+            RoundedRectangle(
+                cornerRadius: 22,
+                style: .continuous
+            )
+        )
     }
 
-    // MARK: - Game Metadata
+    private func compactCardBackground(
+        _ game: Game
+    ) -> some View {
+        RoundedRectangle(
+            cornerRadius: 22,
+            style: .continuous
+        )
+        .fill(
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(0.065),
+                    game.accentColor.opacity(0.065),
+                    Color.white.opacity(0.022)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 22,
+                style: .continuous
+            )
+            .stroke(
+                LinearGradient(
+                    colors: [
+                        game.accentColor.opacity(0.34),
+                        Color.white.opacity(0.08)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1
+            )
+        }
+        .shadow(
+            color: game.accentColor.opacity(0.08),
+            radius: 16,
+            y: 8
+        )
+    }
 
-    private func playerText(
+    private func compactFavoriteButton(
+        _ game: Game
+    ) -> some View {
+        Button {
+            toggleFavorite(game)
+        } label: {
+            Image(
+                systemName:
+                    isFavorite(game)
+                    ? "heart.fill"
+                    : "heart"
+            )
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(
+                isFavorite(game)
+                ? game.accentColor
+                : Color.white.opacity(0.56)
+            )
+            .frame(width: 34, height: 34)
+            .background {
+                Circle()
+                    .fill(Color.black.opacity(0.26))
+            }
+            .overlay {
+                Circle()
+                    .stroke(
+                        isFavorite(game)
+                        ? game.accentColor.opacity(0.46)
+                        : Color.white.opacity(0.10),
+                        lineWidth: 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            isFavorite(game)
+            ? "Remove from liked games"
+            : "Add to liked games"
+        )
+    }
+
+    private func orderedModes(
         for game: Game
+    ) -> [GamePlayMode] {
+        GamePlayMode.allCases.filter {
+            game.supportedModes.contains($0)
+        }
+    }
+
+    private func compactModeBadge(
+        _ mode: GamePlayMode,
+        accent: Color
+    ) -> some View {
+        Image(systemName: modeIcon(mode))
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(accent)
+            .frame(width: 27, height: 27)
+            .background {
+                Circle()
+                    .fill(accent.opacity(0.11))
+            }
+            .overlay {
+                Circle()
+                    .stroke(accent.opacity(0.24), lineWidth: 1)
+            }
+            .accessibilityLabel(modeTitle(mode))
+    }
+
+    private func modeIcon(
+        _ mode: GamePlayMode
     ) -> String {
-        game.playerCountText
+        switch mode {
+        case .nearby:
+            return "antenna.radiowaves.left.and.right"
+        case .local:
+            return "person.2.fill"
+        case .computer:
+            return "cpu"
+        }
+    }
+
+    private func modeTitle(
+        _ mode: GamePlayMode
+    ) -> String {
+        switch mode {
+        case .nearby:
+            return "Nearby"
+        case .local:
+            return "Local"
+        case .computer:
+            return "CPU"
+        }
     }
 
     // MARK: - Favorites
