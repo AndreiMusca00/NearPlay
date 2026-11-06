@@ -20,12 +20,17 @@ struct RicochetView: View {
     @State private var handledEvents: Set<UUID> = []
     @State private var lastTick = Date()
     @State private var waitingForResolution = false
-    @State private var impactFlash = false
     @State private var showQuit = false
     @State private var showResult = false
     @State private var isQuitting = false
     @State private var sessionScore = GameSessionScore()
     @State private var scoreRoundNumber = 1
+    @State private var remoteBallX: Double?
+    @State private var remoteBallLastSeenAt = Date.distantPast
+    @State private var lastBallPositionSentAt = Date.distantPast
+    @State private var arenaMoment: RicochetArenaMoment?
+    @State private var arenaMomentPhase = 0
+    @State private var isGameplayPaused = false
 
     private let frameTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
     private let shieldY = 0.79
@@ -65,6 +70,11 @@ struct RicochetView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
 
+            if let arenaMoment {
+                momentOverlay(arenaMoment)
+                    .zIndex(15)
+                    .transition(.opacity)
+            }
             if showResult { resultOverlay.zIndex(20) }
             if isQuitting {
                 Color.black.opacity(0.72).ignoresSafeArea()
@@ -87,10 +97,17 @@ struct RicochetView: View {
         .onReceive(nearbyService.$lastReceivedMessage) { handleIncoming($0) }
         .onChange(of: state.roundID) { _, _ in
             ball = nil; trail.removeAll(); waitingForResolution = false
+            remoteBallX = nil
+            lastBallPositionSentAt = .distantPast
         }
         .onChange(of: state.isRoundActive) { _, active in
-            guard active, state.serverPlayerID == localPlayerID else { return }
-            launchServe()
+            guard active else {
+                remoteBallX = nil
+                return
+            }
+            if state.serverPlayerID == localPlayerID {
+                launchServe()
+            }
         }
         .onChange(of: state.winnerPlayerID) { _, winner in
             guard winner != nil else { showResult = false; return }
@@ -102,9 +119,13 @@ struct RicochetView: View {
             guard let confirmedRound else { return }
             scoreRoundNumber = confirmedRound
             showResult = false
+            arenaMoment = nil
+            isGameplayPaused = false
             ball = nil
             trail.removeAll()
             waitingForResolution = false
+            remoteBallX = nil
+            lastBallPositionSentAt = .distantPast
 
             if isHost {
                 let starter = confirmedRound.isMultiple(of: 2)
@@ -123,7 +144,7 @@ struct RicochetView: View {
             showResult = false
             guard state.isFinished else { return }
             sessionScore.record(localResult: localRoundResult, roundNumber: scoreRoundNumber)
-            try? await Task.sleep(nanoseconds: 800_000_000)
+            try? await Task.sleep(nanoseconds: 2_800_000_000)
             guard !Task.isCancelled, state.isFinished else { return }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) { showResult = true }
         }
@@ -185,9 +206,24 @@ struct RicochetView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 27)
                     .fill(LinearGradient(colors: [Color(red: 0.03, green: 0.09, blue: 0.16), Color(red: 0.10, green: 0.035, blue: 0.14)], startPoint: .top, endPoint: .bottom))
-                grid(in: proxy.size)
                 portal(width: proxy.size.width)
                     .position(x: proxy.size.width / 2, y: 12)
+
+                if ball == nil,
+                   state.isRoundActive,
+                   !waitingForResolution,
+                   let remoteBallX {
+                    remoteBallIndicator
+                        .position(
+                            x: proxy.size.width * remoteBallX,
+                            y: 52
+                        )
+                        .animation(
+                            .easeOut(duration: 0.14),
+                            value: remoteBallX
+                        )
+                        .transition(.opacity.combined(with: .scale))
+                }
 
                 ForEach(Array(trail.enumerated()), id: \.offset) { index, point in
                     Circle().fill(activeColor.opacity(Double(index + 1) / Double(max(trail.count, 1)) * 0.45))
@@ -204,22 +240,15 @@ struct RicochetView: View {
 
                 shield
                     .position(shieldPoint)
-                core
-                    .position(x: proxy.size.width / 2, y: proxy.size.height * 0.925)
 
                 if !state.isRoundActive && !state.isFinished {
                     preRoundOverlay
                 } else if state.isRoundActive && ball == nil {
-                    Text(waitingForResolution ? "SYNCING IMPACT…" : "PROJECTILE ON OTHER SCREEN")
+                    Text(waitingForResolution ? "SYNCING IMPACT…" : "TRACKING RIVAL SCREEN")
                         .font(.system(size: 11, weight: .black, design: .rounded)).tracking(0.8)
                         .foregroundStyle(.white.opacity(0.38))
                 }
 
-                if impactFlash {
-                    Color.red.opacity(0.25).transition(.opacity)
-                    Image(systemName: "burst.fill").font(.system(size: 80)).foregroundStyle(.white, .red)
-                        .transition(.scale.combined(with: .opacity))
-                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 27))
             .overlay(RoundedRectangle(cornerRadius: 27).stroke(activeColor.opacity(0.22), lineWidth: 1.2))
@@ -230,21 +259,6 @@ struct RicochetView: View {
             })
         }
         .frame(minHeight: 350)
-    }
-
-    private func grid(in size: CGSize) -> some View {
-        Canvas { context, _ in
-            var path = Path()
-            for column in 1..<8 {
-                let x = size.width * CGFloat(column) / 8
-                path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height))
-            }
-            for row in 1..<12 {
-                let y = size.height * CGFloat(row) / 12
-                path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y))
-            }
-            context.stroke(path, with: .color(activeColor.opacity(0.055)), lineWidth: 1)
-        }
     }
 
     private func portal(width: CGFloat) -> some View {
@@ -266,12 +280,142 @@ struct RicochetView: View {
         }.animation(.interactiveSpring(response: 0.16, dampingFraction: 0.76), value: shieldX)
     }
 
-    private var core: some View {
+    private var remoteBallIndicator: some View {
         ZStack {
-            Circle().fill(activeColor.opacity(0.14)).frame(width: 72, height: 72).blur(radius: 5)
-            Circle().stroke(activeColor.opacity(0.50), lineWidth: 2).frame(width: 54, height: 54)
-            Circle().fill(activeColor).frame(width: 25, height: 25).shadow(color: activeColor, radius: 15)
-            Circle().fill(.white).frame(width: 8, height: 8)
+            Circle()
+                .fill(opponentColor.opacity(0.20))
+                .frame(width: 30, height: 30)
+                .blur(radius: 6)
+            Circle()
+                .stroke(opponentColor.opacity(0.82), lineWidth: 2)
+                .frame(width: 22, height: 22)
+            Circle()
+                .fill(.white)
+                .frame(width: 9, height: 9)
+                .shadow(color: opponentColor, radius: 8)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .black))
+                .foregroundStyle(opponentColor)
+                .offset(y: 19)
+        }
+        .accessibilityLabel("Opponent ball position")
+    }
+
+    @ViewBuilder
+    private func momentOverlay(_ moment: RicochetArenaMoment) -> some View {
+        ZStack {
+            Color.black.opacity(0.78).ignoresSafeArea()
+
+            RadialGradient(
+                colors: [moment.accent.opacity(0.30), .clear],
+                center: .center,
+                startRadius: 12,
+                endRadius: 260
+            )
+            .ignoresSafeArea()
+
+            switch moment.kind {
+            case .speedUp:
+                VStack(spacing: 18) {
+                    ZStack {
+                        Circle()
+                            .stroke(moment.accent.opacity(0.18), lineWidth: 20)
+                            .frame(width: 142, height: 142)
+                        Circle()
+                            .trim(from: 0.08, to: 0.82)
+                            .stroke(
+                                AngularGradient(
+                                    colors: [.white, moment.accent, .white],
+                                    center: .center
+                                ),
+                                style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                            )
+                            .frame(width: 142, height: 142)
+                            .rotationEffect(.degrees(-70))
+                            .shadow(color: moment.accent, radius: 16)
+                        Image(systemName: "chevron.up.2")
+                            .font(.system(size: 48, weight: .black))
+                            .foregroundStyle(.white)
+                    }
+
+                    Text("SPEEDING UP")
+                        .font(.system(size: 38, weight: .black, design: .rounded))
+                        .tracking(2.4)
+                    Text("Get ready — the pulse is accelerating")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.56))
+                }
+                .transition(.scale(scale: 0.82).combined(with: .opacity))
+
+            case let .point(winnerID, serverID, matchFinished):
+                pointMomentContent(
+                    winnerID: winnerID,
+                    serverID: serverID,
+                    matchFinished: matchFinished,
+                    accent: moment.accent
+                )
+                .id(arenaMomentPhase)
+                .transition(.scale(scale: 0.78).combined(with: .opacity))
+            }
+        }
+        .foregroundStyle(.white)
+        .contentShape(Rectangle())
+        .allowsHitTesting(true)
+    }
+
+    @ViewBuilder
+    private func pointMomentContent(
+        winnerID: String,
+        serverID: String,
+        matchFinished: Bool,
+        accent: Color
+    ) -> some View {
+        if arenaMomentPhase == 0 {
+            if winnerID == localPlayerID {
+                VStack(spacing: 15) {
+                    Image(systemName: "bolt.circle.fill")
+                        .font(.system(size: 104, weight: .black))
+                        .foregroundStyle(.black, accent)
+                        .shadow(color: accent, radius: 28)
+                    Text("POINT WON!")
+                        .font(.system(size: 40, weight: .black, design: .rounded))
+                        .tracking(2.2)
+                    Text("Great return")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.58))
+                }
+            } else {
+                VStack(spacing: 14) {
+                    Image(systemName: "burst.fill")
+                        .font(.system(size: 126, weight: .black))
+                        .foregroundStyle(.white, Color.orange)
+                        .shadow(color: .red.opacity(0.9), radius: 28)
+                    Text("BOOM!")
+                        .font(.system(size: 46, weight: .black, design: .rounded))
+                        .tracking(3)
+                    Text("The pulse crossed your shield")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.58))
+                }
+            }
+        } else {
+            VStack(spacing: 16) {
+                Image(systemName: matchFinished ? "trophy.fill" : "paperplane.circle.fill")
+                    .font(.system(size: 88, weight: .black))
+                    .foregroundStyle(accent)
+                    .shadow(color: accent, radius: 22)
+                Text(matchFinished ? "MATCH COMPLETE" : "NEXT SERVE")
+                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .tracking(2.2)
+                    .foregroundStyle(.white.opacity(0.52))
+                Text(
+                    matchFinished
+                        ? (winnerID == localPlayerID ? "YOU WIN" : "\(displayName(for: winnerID).uppercased()) WINS")
+                        : (serverID == localPlayerID ? "YOUR SERVE" : "\(displayName(for: serverID).uppercased()) SERVES")
+                )
+                .font(.system(size: 34, weight: .black, design: .rounded))
+                .tracking(1.5)
+            }
         }
     }
 
@@ -310,7 +454,7 @@ struct RicochetView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(usesTouchControl ? "DRAG THE SHIELD" : (motion.isAvailable ? "TILT TO MOVE" : "MOTION UNAVAILABLE"))
                     .font(.system(size: 10, weight: .black)).foregroundStyle(activeColor)
-                Text("Block the pulse and send it back faster.")
+                Text("Deflect the pulse before it crosses your shield.")
                     .font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.38)).lineLimit(1)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.foregroundStyle(.white)
@@ -319,7 +463,18 @@ struct RicochetView: View {
     private func tick(_ date: Date) {
         let dt = min(max(date.timeIntervalSince(lastTick), 0), 0.035)
         lastTick = date
-        guard var moving = ball, state.isRoundActive, !waitingForResolution else { return }
+
+        if remoteBallX != nil,
+           date.timeIntervalSince(remoteBallLastSeenAt) > 0.8 {
+            withAnimation(.easeOut(duration: 0.18)) {
+                remoteBallX = nil
+            }
+        }
+
+        guard var moving = ball,
+              state.isRoundActive,
+              !waitingForResolution,
+              !isGameplayPaused else { return }
 
         let previousY = moving.y
         moving.x += moving.velocityX * dt
@@ -331,15 +486,21 @@ struct RicochetView: View {
         if moving.velocityY > 0, previousY < shieldY, moving.y >= shieldY {
             let offset = (moving.x - shieldX) / shieldHalfWidth
             if abs(offset) <= 1 {
-                let newSpeed = min(1.22, moving.speed + 0.055)
+                state.rally += 1
+                let shouldSpeedUp = state.rally.isMultiple(of: 5) && moving.speed < 1.22
+                let newSpeed = shouldSpeedUp
+                    ? min(1.22, moving.speed + 0.13)
+                    : moving.speed
                 let horizontal = (moving.velocityX + offset * 0.38 + (shieldX - 0.5) * 0.08).clamped(to: -0.72...0.72)
                 let vertical = -sqrt(max(0.18, newSpeed * newSpeed - horizontal * horizontal))
                 moving.y = shieldY - 0.012
                 moving.velocityX = horizontal
                 moving.velocityY = vertical
                 moving.speed = newSpeed
-                state.rally += 1
                 UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: min(1, 0.45 + Double(state.rally) * 0.08))
+                if shouldSpeedUp {
+                    announceSpeedIncrease(speed: newSpeed, rally: state.rally)
+                }
             }
         }
 
@@ -352,9 +513,14 @@ struct RicochetView: View {
             return
         }
         if moving.y > 1.04 {
-            ball = nil; trail.removeAll(); registerLocalMiss()
+            ball = nil
+            trail.removeAll()
+            remoteBallX = nil
+            registerLocalMiss()
             return
         }
+
+        sendProjectilePositionIfNeeded(moving, at: date)
         ball = moving
     }
 
@@ -384,9 +550,12 @@ struct RicochetView: View {
             sessionID: startPayload.sessionID, kind: .projectileTransfer,
             playerID: localPlayerID, roundID: state.roundID, eventID: UUID(),
             x: 1 - outgoing.x, velocityX: -outgoing.velocityX,
-            speed: outgoing.speed, rally: state.rally
+            speed: outgoing.speed, rally: state.rally,
+            targetPlayerID: nil, matchFinished: nil
         )
         send(payload)
+        remoteBallX = outgoing.x.clamped(to: 0.04...0.96)
+        remoteBallLastSeenAt = Date()
     }
 
     private func receiveProjectile(_ payload: RicochetActionPayload) {
@@ -396,19 +565,162 @@ struct RicochetView: View {
         let vertical = sqrt(max(0.18, speed * speed - vx * vx))
         state.rally = max(state.rally, payload.rally ?? 0)
         trail.removeAll()
+        remoteBallX = nil
         ball = RicochetBall(x: x.clamped(to: 0.04...0.96), y: 0.025,
                              velocityX: vx.clamped(to: -0.76...0.76), velocityY: vertical, speed: speed)
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
     }
 
+    private func sendProjectilePositionIfNeeded(
+        _ moving: RicochetBall,
+        at date: Date
+    ) {
+        guard date.timeIntervalSince(lastBallPositionSentAt) >= 0.12 else {
+            return
+        }
+
+        lastBallPositionSentAt = date
+        send(.init(
+            sessionID: startPayload.sessionID,
+            kind: .projectilePosition,
+            playerID: localPlayerID,
+            roundID: state.roundID,
+            eventID: UUID(),
+            x: moving.x,
+            velocityX: nil,
+            speed: nil,
+            rally: nil,
+            targetPlayerID: nil,
+            matchFinished: nil
+        ))
+    }
+
+    private func receiveProjectilePosition(
+        _ payload: RicochetActionPayload
+    ) {
+        guard payload.roundID == state.roundID,
+              state.isRoundActive,
+              payload.playerID != localPlayerID,
+              ball == nil,
+              let x = payload.x else {
+            return
+        }
+
+        remoteBallLastSeenAt = Date()
+        withAnimation(.easeOut(duration: 0.12)) {
+            remoteBallX = (1 - x).clamped(to: 0.04...0.96)
+        }
+    }
+
+    private func announceSpeedIncrease(speed: Double, rally: Int) {
+        send(.init(
+            sessionID: startPayload.sessionID,
+            kind: .speedUp,
+            playerID: localPlayerID,
+            roundID: state.roundID,
+            eventID: UUID(),
+            x: nil,
+            velocityX: nil,
+            speed: speed,
+            rally: rally,
+            targetPlayerID: nil,
+            matchFinished: nil
+        ))
+        presentSpeedIncrease(speed: speed, rally: rally)
+    }
+
+    private func announcePointResolution(
+        loserID: String,
+        matchFinished: Bool
+    ) {
+        send(.init(
+            sessionID: startPayload.sessionID,
+            kind: .pointResolved,
+            playerID: localPlayerID,
+            roundID: state.roundID,
+            eventID: UUID(),
+            x: nil,
+            velocityX: nil,
+            speed: nil,
+            rally: state.rally,
+            targetPlayerID: loserID,
+            matchFinished: matchFinished
+        ))
+        presentPointResolution(
+            loserID: loserID,
+            matchFinished: matchFinished
+        )
+    }
+
+    private func presentSpeedIncrease(speed: Double, rally: Int) {
+        if let arenaMoment, case .point = arenaMoment.kind { return }
+
+        let moment = RicochetArenaMoment(
+            kind: .speedUp,
+            accent: RicochetTheme.cyan
+        )
+        arenaMomentPhase = 0
+        isGameplayPaused = true
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+            arenaMoment = moment
+        }
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_550_000_000)
+            guard arenaMoment?.id == moment.id else { return }
+            withAnimation(.easeOut(duration: 0.22)) {
+                arenaMoment = nil
+            }
+            isGameplayPaused = false
+        }
+    }
+
+    private func presentPointResolution(
+        loserID: String,
+        matchFinished: Bool
+    ) {
+        let winnerID = loserID == startPayload.playerOneID
+            ? startPayload.playerTwoID
+            : startPayload.playerOneID
+        let moment = RicochetArenaMoment(
+            kind: .point(
+                winnerID: winnerID,
+                serverID: loserID,
+                matchFinished: matchFinished
+            ),
+            accent: playerColor(for: winnerID)
+        )
+
+        arenaMomentPhase = 0
+        isGameplayPaused = true
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+            arenaMoment = moment
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(
+            winnerID == localPlayerID ? .success : .error
+        )
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_050_000_000)
+            guard arenaMoment?.id == moment.id else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.76)) {
+                arenaMomentPhase = 2
+            }
+
+            try? await Task.sleep(nanoseconds: 1_250_000_000)
+            guard arenaMoment?.id == moment.id else { return }
+            withAnimation(.easeOut(duration: 0.24)) {
+                arenaMoment = nil
+            }
+            isGameplayPaused = false
+        }
+    }
+
     private func registerLocalMiss() {
         guard state.isRoundActive else { return }
         waitingForResolution = true
-        withAnimation(.easeOut(duration: 0.15)) { impactFlash = true }
         UINotificationFeedbackGenerator().notificationOccurred(.error)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.48) {
-            withAnimation(.easeOut(duration: 0.3)) { impactFlash = false }
-        }
         if isHost { applyLifeLoss(to: localPlayerID) }
         else { sendAction(kind: .lifeLost) }
     }
@@ -423,6 +735,10 @@ struct RicochetView: View {
             state.winnerPlayerID = playerID == startPayload.playerOneID ? startPayload.playerTwoID : startPayload.playerOneID
         }
         broadcastState()
+        announcePointResolution(
+            loserID: playerID,
+            matchFinished: state.isFinished
+        )
     }
 
     private func handleIncoming(_ message: NearbyMessage?) {
@@ -432,16 +748,35 @@ struct RicochetView: View {
         case .gameAction:
             guard let data = message.payload,
                   let payload = try? JSONDecoder().decode(RicochetActionPayload.self, from: data),
-                  payload.sessionID == startPayload.sessionID,
-                  handledEvents.insert(payload.eventID).inserted else { return }
+                  payload.sessionID == startPayload.sessionID else { return }
+
+            if payload.kind == .projectilePosition {
+                receiveProjectilePosition(payload)
+                return
+            }
+
+            guard handledEvents.insert(payload.eventID).inserted else { return }
             switch payload.kind {
             case .projectileTransfer: receiveProjectile(payload)
+            case .projectilePosition: break
+            case .speedUp:
+                guard payload.roundID == state.roundID,
+                      let speed = payload.speed,
+                      let rally = payload.rally else { return }
+                presentSpeedIncrease(speed: speed, rally: rally)
             case .requestServe:
                 guard isHost, payload.playerID == state.serverPlayerID else { return }
                 activateRound()
             case .lifeLost:
                 guard isHost, payload.roundID == state.roundID else { return }
                 applyLifeLoss(to: payload.playerID)
+            case .pointResolved:
+                guard let loserID = payload.targetPlayerID,
+                      loserID == startPayload.playerOneID || loserID == startPayload.playerTwoID else { return }
+                presentPointResolution(
+                    loserID: loserID,
+                    matchFinished: payload.matchFinished ?? false
+                )
             }
         case .gameState:
             guard let data = message.payload,
@@ -455,7 +790,8 @@ struct RicochetView: View {
 
     private func sendAction(kind: RicochetActionKind) {
         send(.init(sessionID: startPayload.sessionID, kind: kind, playerID: localPlayerID,
-                   roundID: state.roundID, eventID: UUID(), x: nil, velocityX: nil, speed: nil, rally: nil))
+                   roundID: state.roundID, eventID: UUID(), x: nil, velocityX: nil, speed: nil, rally: nil,
+                   targetPlayerID: nil, matchFinished: nil))
     }
 
     private func send(_ payload: RicochetActionPayload) {
@@ -507,12 +843,29 @@ struct RicochetView: View {
     private var localColor: Color { localPlayerID == startPayload.playerOneID ? RicochetTheme.cyan : RicochetTheme.magenta }
     private var opponentColor: Color { localPlayerID == startPayload.playerOneID ? RicochetTheme.magenta : RicochetTheme.cyan }
     private var activeColor: Color { localColor }
+    private func displayName(for playerID: String) -> String {
+        playerID == localPlayerID ? localPlayerName : opponentName
+    }
+    private func playerColor(for playerID: String) -> Color {
+        playerID == localPlayerID ? localColor : opponentColor
+    }
     private var statusText: String {
         if state.isFinished { return "LINK CLOSED" }
         if !state.isRoundActive { return state.serverPlayerID == localPlayerID ? "READY TO SERVE" : "WAITING FOR \(opponentName.uppercased())" }
-        if ball != nil { return "DEFEND YOUR CORE" }
+        if ball != nil { return "DEFLECT THE PULSE" }
         return "PULSE ACROSS THE LINK  •  RALLY \(state.rally)"
     }
+}
+
+private struct RicochetArenaMoment: Identifiable {
+    enum Kind {
+        case speedUp
+        case point(winnerID: String, serverID: String, matchFinished: Bool)
+    }
+
+    let id = UUID()
+    let kind: Kind
+    let accent: Color
 }
 
 private extension Double {

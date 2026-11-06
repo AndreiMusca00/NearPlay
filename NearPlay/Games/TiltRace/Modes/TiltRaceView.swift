@@ -10,6 +10,7 @@ struct TiltRaceView: View {
     let onExitToHome: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var motion = TiltRaceMotionController()
     @StateObject private var rematchController: RematchController
     @State private var state: TiltRaceMatchState
@@ -98,12 +99,27 @@ struct TiltRaceView: View {
             Text("You and your opponent will return to the game list.")
         }
         .onAppear {
-            motion.start()
+            motion.start(recalibrating: true)
             resetLocalBall()
             now = Date()
             lastTick = now
         }
         .onDisappear { motion.stop() }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                velocityX = 0
+                velocityY = 0
+                lastTick = Date()
+                motion.start(recalibrating: true)
+            case .inactive, .background:
+                velocityX = 0
+                velocityY = 0
+                motion.stop()
+            @unknown default:
+                break
+            }
+        }
         .onReceive(frameTimer, perform: tick)
         .onReceive(nearbyService.$lastReceivedMessage) { handleIncoming($0) }
         .onChange(of: state.roundID) { _, _ in
@@ -447,6 +463,7 @@ struct TiltRaceView: View {
         now = date
         let dt = min(max(date.timeIntervalSince(lastTick), 0), 0.035)
         lastTick = date
+        motion.updateHealth(at: date)
 
         guard hasRaceStarted, !state.isFinished, localProgress < TiltRaceGame.gateCount else {
             return
@@ -455,7 +472,7 @@ struct TiltRaceView: View {
         if usesTouchControl || !motion.isAvailable {
             ballX += (touchX - ballX) * min(1, dt * 15)
             ballY += (touchY - ballY) * min(1, dt * 15)
-        } else {
+        } else if motion.isReady {
             velocityX += motion.tiltX * 0.92 * dt
             velocityY += motion.tiltY * 0.92 * dt
 
@@ -470,6 +487,15 @@ struct TiltRaceView: View {
                 velocityY *= scale
             }
 
+            ballX += velocityX * dt
+            ballY += velocityY * dt
+        } else {
+            // Let any existing motion settle while Core Motion recalibrates.
+            // Reusing a stale sensor value is what previously pinned the ball
+            // against the top edge after an interrupted update stream.
+            let recoveryDamping = pow(0.025, dt)
+            velocityX *= recoveryDamping
+            velocityY *= recoveryDamping
             ballX += velocityX * dt
             ballY += velocityY * dt
         }
@@ -675,6 +701,8 @@ struct TiltRaceView: View {
     }
     private var controlTitle: String {
         if usesTouchControl || !motion.isAvailable { return "DRAG TO STEER" }
+        if motion.isCalibrating { return "HOLD STEADY TO CALIBRATE" }
+        if !motion.isReceivingUpdates { return "RECOVERING SENSOR" }
         return "TILT TO STEER"
     }
     private var statusText: String {

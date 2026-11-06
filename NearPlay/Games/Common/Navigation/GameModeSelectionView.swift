@@ -89,6 +89,7 @@ struct GameModeSelectionView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
+        .interactiveBackGestureEnabled()
         .preferredColorScheme(.dark)
     }
 

@@ -23,7 +23,10 @@ struct RicochetBall: Equatable {
 enum RicochetActionKind: String, Codable {
     case requestServe
     case projectileTransfer
+    case projectilePosition
+    case speedUp
     case lifeLost
+    case pointResolved
 }
 
 struct RicochetStartPayload: Codable, Equatable {
@@ -45,6 +48,8 @@ struct RicochetActionPayload: Codable, Equatable {
     let velocityX: Double?
     let speed: Double?
     let rally: Int?
+    let targetPlayerID: String?
+    let matchFinished: Bool?
 }
 
 struct RicochetStatePayload: Codable, Equatable {

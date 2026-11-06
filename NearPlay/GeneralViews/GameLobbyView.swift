@@ -274,6 +274,8 @@ struct GameLobbyView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .interactiveBackGestureEnabled(!isStartingGame)
         .preferredColorScheme(.dark)
         .onAppear {
             // Nearby Play never triggers permission prompts from the lobby.
