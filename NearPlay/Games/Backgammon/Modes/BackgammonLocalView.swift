@@ -324,8 +324,8 @@ struct BackgammonLocalView: View {
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.warning)
 
-        case .moved(let appliedMove, let didHit),
-             .turnEnded(let appliedMove, let didHit):
+        case .moved(_, let didHit),
+             .turnEnded(_, let didHit):
             selectedSource = nil
 
             if didHit {
@@ -340,7 +340,7 @@ struct BackgammonLocalView: View {
 
             autoPlayForcedMovesIfNeeded()
 
-        case .won(let appliedMove):
+        case .won:
             selectedSource = nil
 
             UINotificationFeedbackGenerator()

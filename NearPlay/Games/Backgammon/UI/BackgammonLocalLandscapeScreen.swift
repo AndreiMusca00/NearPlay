@@ -85,7 +85,7 @@ struct BackgammonLocalLandscapeScreen: View {
         .onDisappear {
             diceAnimationID = UUID()
         }
-        .onChange(of: state.dice) { newDice in
+        .onChange(of: state.dice) { _, newDice in
             handleDiceChange(newDice)
         }
     }

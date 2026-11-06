@@ -363,9 +363,6 @@ struct ConnectFourView: View {
         let previousLastMove =
             controller.state.lastMove
 
-        let previousWinner =
-            controller.state.winnerPlayerID
-
         currentRoundNumber = roundNumber
 
         controller.applyRemoteState(
@@ -397,11 +394,6 @@ struct ConnectFourView: View {
                     : .light
             )
             .impactOccurred()
-        }
-
-        if previousWinner == nil,
-           let winner =
-            newState.winnerPlayerID {
         }
     }
 
