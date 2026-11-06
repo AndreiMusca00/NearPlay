@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct GameModeSelectionView: View {
     let game: Game
@@ -11,13 +12,21 @@ struct GameModeSelectionView: View {
     let onNearby: () -> Void
     let onLocal: () -> Void
     let onComputer: (GameAIDifficulty) -> Void
+    let onHowToPlay: (() -> Void)?
 
     @Environment(\.dismiss)
     private var dismiss
 
+    @Environment(\._favoriteGameIDsBinding)
+    private var favoriteGameIDs: Binding<Set<String>>
+
     @State
     private var difficulty:
         GameAIDifficulty = .medium
+
+    private var isFavorite: Bool {
+        favoriteGameIDs.wrappedValue.contains(game.id)
+    }
 
     var body: some View {
         ZStack {
@@ -125,6 +134,7 @@ struct GameModeSelectionView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
+            .frame(width: 87, alignment: .leading)
 
             Spacer()
 
@@ -155,14 +165,106 @@ struct GameModeSelectionView: View {
 
             Spacer()
 
-            GameIconView(
-                game: game,
-                size: 46,
-                cornerRadius: 23,
-                symbolSize: 18
-            )
+            HStack(spacing: 7) {
+                if let onHowToPlay {
+                    Button(action: onHowToPlay) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    GameModeSelectionTheme
+                                        .cyan
+                                        .opacity(0.12)
+                                )
+
+                            Circle()
+                                .stroke(
+                                    GameModeSelectionTheme
+                                        .cyan
+                                        .opacity(0.42),
+                                    lineWidth: 1
+                                )
+
+                            Image(systemName: "questionmark")
+                                .font(
+                                    .system(
+                                        size: 16,
+                                        weight: .bold
+                                    )
+                                )
+                                .foregroundStyle(
+                                    GameModeSelectionTheme.cyan
+                                )
+                        }
+                        .frame(width: 40, height: 40)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("How to play")
+                }
+
+                Button(action: toggleFavorite) {
+                    Image(
+                        systemName:
+                            isFavorite
+                            ? "heart.fill"
+                            : "heart"
+                    )
+                    .font(
+                        .system(
+                            size: 18,
+                            weight: .semibold
+                        )
+                    )
+                    .foregroundStyle(
+                        isFavorite
+                        ? GameModeSelectionTheme.cyan
+                        : Color.white
+                    )
+                    .frame(width: 40, height: 40)
+                    .background {
+                        Circle()
+                            .fill(Color.white.opacity(0.055))
+                    }
+                    .overlay {
+                        Circle()
+                            .stroke(
+                                isFavorite
+                                ? GameModeSelectionTheme
+                                    .cyan
+                                    .opacity(0.50)
+                                : Color.white.opacity(0.12),
+                                lineWidth: 1
+                            )
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    isFavorite
+                    ? "Remove from liked games"
+                    : "Add to liked games"
+                )
+            }
+            .frame(width: 87, alignment: .trailing)
         }
         .padding(.bottom, 5)
+    }
+
+    private func toggleFavorite() {
+        var updatedFavorites =
+            favoriteGameIDs.wrappedValue
+
+        if updatedFavorites.contains(game.id) {
+            updatedFavorites.remove(game.id)
+        } else {
+            updatedFavorites.insert(game.id)
+        }
+
+        withAnimation(.easeInOut(duration: 0.18)) {
+            favoriteGameIDs.wrappedValue =
+                updatedFavorites
+        }
+
+        UIImpactFeedbackGenerator(style: .light)
+            .impactOccurred()
     }
 
     // MARK: - Normal mode card

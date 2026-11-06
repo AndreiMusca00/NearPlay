@@ -18,6 +18,12 @@ struct GameEntryView: View {
     private var selectedDifficulty:
         GameAIDifficulty = .medium
 
+    @State
+    private var showTutorial = false
+
+    @State
+    private var didEvaluateTutorial = false
+
     var body: some View {
         GameModeSelectionView(
             game: game,
@@ -57,6 +63,9 @@ struct GameEntryView: View {
                 } else {
                     showComputer = true
                 }
+            },
+            onHowToPlay: {
+                showTutorial = true
             }
         )
         .navigationDestination(
@@ -65,7 +74,8 @@ struct GameEntryView: View {
             GameLobbyView(
                 game: game,
                 onExitToHome:
-                    onExitToHome
+                    onExitToHome,
+                automaticallyShowsTutorial: false
             )
         }
         .navigationDestination(
@@ -77,6 +87,44 @@ struct GameEntryView: View {
             isPresented: $showComputer
         ) {
             computerDestination
+        }
+        .fullScreenCover(
+            isPresented: $showTutorial
+        ) {
+            GameTutorialView(
+                game: game,
+                onDismiss: {
+                    showTutorial = false
+                },
+                onNeverShowAgain: {
+                    GameTutorialPreference.dismiss(
+                        for: game.id
+                    )
+                    showTutorial = false
+                }
+            )
+            .interactiveDismissDisabled()
+        }
+        .onAppear {
+            presentTutorialIfNeeded()
+        }
+    }
+
+    private func presentTutorialIfNeeded() {
+        guard !didEvaluateTutorial else {
+            return
+        }
+
+        didEvaluateTutorial = true
+
+        guard !GameTutorialPreference.isDismissed(
+            for: game.id
+        ) else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            showTutorial = true
         }
     }
 

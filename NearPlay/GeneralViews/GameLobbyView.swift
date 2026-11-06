@@ -9,6 +9,7 @@ import UIKit
 struct GameLobbyView: View {
     let game: Game
     let onExitToHome: (() -> Void)?
+    let automaticallyShowsTutorial: Bool
 
     @StateObject private var nearbyService = NearbyService()
     @EnvironmentObject private var nearbyPermissions: NearbyPermissionsManager
@@ -30,6 +31,8 @@ struct GameLobbyView: View {
 
     @State private var showNearbyPermissionAlert = false
     @State private var showNearPlaySettings = false
+    @State private var showGameTutorial = false
+    @State private var didEvaluateTutorial = false
 
     @State private var countdownValue: Int?
     @State private var countdownTimer: Timer?
@@ -69,10 +72,13 @@ struct GameLobbyView: View {
 
     init(
         game: Game,
-        onExitToHome: (() -> Void)? = nil
+        onExitToHome: (() -> Void)? = nil,
+        automaticallyShowsTutorial: Bool = true
     ) {
         self.game = game
         self.onExitToHome = onExitToHome
+        self.automaticallyShowsTutorial =
+            automaticallyShowsTutorial
     }
 
     // MARK: - Computed properties
@@ -283,8 +289,8 @@ struct GameLobbyView: View {
             // It only checks the known state and blocks discovery when access is missing.
             nearbyPermissions.refreshKnownStatuses()
 
-            DispatchQueue.main.async {
-                showNearbyPermissionAlert = !hasRequiredNearbyPermissions
+            if !presentTutorialIfNeeded() {
+                presentNearbyPermissionAlertIfNeeded()
             }
         }
         .onDisappear {
@@ -367,6 +373,26 @@ struct GameLobbyView: View {
         ) {
             SettingsView(playerName: $playerName)
         }
+        .fullScreenCover(
+            isPresented: $showGameTutorial,
+            onDismiss: {
+                presentNearbyPermissionAlertIfNeeded()
+            }
+        ) {
+            GameTutorialView(
+                game: game,
+                onDismiss: {
+                    showGameTutorial = false
+                },
+                onNeverShowAgain: {
+                    GameTutorialPreference.dismiss(
+                        for: game.id
+                    )
+                    showGameTutorial = false
+                }
+            )
+            .interactiveDismissDisabled()
+        }
         .alert(
             "Nearby Play Needs Access",
             isPresented: $showNearbyPermissionAlert
@@ -382,6 +408,35 @@ struct GameLobbyView: View {
             }
         } message: {
             Text(missingNearbyPermissionsMessage)
+        }
+    }
+
+    @discardableResult
+    private func presentTutorialIfNeeded() -> Bool {
+        guard automaticallyShowsTutorial,
+              !didEvaluateTutorial else {
+            return false
+        }
+
+        didEvaluateTutorial = true
+
+        guard !GameTutorialPreference.isDismissed(
+            for: game.id
+        ) else {
+            return false
+        }
+
+        DispatchQueue.main.async {
+            showGameTutorial = true
+        }
+
+        return true
+    }
+
+    private func presentNearbyPermissionAlertIfNeeded() {
+        DispatchQueue.main.async {
+            showNearbyPermissionAlert =
+                !hasRequiredNearbyPermissions
         }
     }
 
@@ -483,46 +538,83 @@ struct GameLobbyView: View {
 
             Spacer(minLength: 8)
 
-            Button {
-                toggleFavorite()
-            } label: {
-                Image(
-                    systemName: isFavorite
-                        ? "heart.fill"
-                        : "heart"
-                )
-                .font(
-                    .system(
-                        size: 21,
-                        weight: .semibold
-                    )
-                )
-                .foregroundStyle(
-                    isFavorite
-                        ? LobbyTheme.brightBlue
-                        : Color.white
-                )
-                .frame(width: 48, height: 48)
-                .background {
-                    Circle()
-                        .fill(Color.white.opacity(0.055))
-                }
-                .overlay {
-                    Circle()
-                        .stroke(
-                            isFavorite
-                                ? LobbyTheme.brightBlue.opacity(0.5)
-                                : Color.white.opacity(0.12),
-                            lineWidth: 1
+            HStack(spacing: 7) {
+                Button {
+                    showGameTutorial = true
+                } label: {
+                    Image(systemName: "questionmark")
+                        .font(
+                            .system(
+                                size: 16,
+                                weight: .bold
+                            )
                         )
+                        .foregroundStyle(
+                            LobbyTheme.brightBlue
+                        )
+                        .frame(width: 40, height: 40)
+                        .background {
+                            Circle()
+                                .fill(
+                                    LobbyTheme
+                                        .brightBlue
+                                        .opacity(0.10)
+                                )
+                        }
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    LobbyTheme
+                                        .brightBlue
+                                        .opacity(0.34),
+                                    lineWidth: 1
+                                )
+                        }
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("How to play")
+
+                Button {
+                    toggleFavorite()
+                } label: {
+                    Image(
+                        systemName: isFavorite
+                            ? "heart.fill"
+                            : "heart"
+                    )
+                    .font(
+                        .system(
+                            size: 18,
+                            weight: .semibold
+                        )
+                    )
+                    .foregroundStyle(
+                        isFavorite
+                            ? LobbyTheme.brightBlue
+                            : Color.white
+                    )
+                    .frame(width: 40, height: 40)
+                    .background {
+                        Circle()
+                            .fill(Color.white.opacity(0.055))
+                    }
+                    .overlay {
+                        Circle()
+                            .stroke(
+                                isFavorite
+                                    ? LobbyTheme.brightBlue.opacity(0.5)
+                                    : Color.white.opacity(0.12),
+                                lineWidth: 1
+                            )
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    isFavorite
+                        ? "Remove from liked games"
+                        : "Add to liked games"
+                )
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                isFavorite
-                    ? "Remove from liked games"
-                    : "Add to liked games"
-            )
         }
     }
 
