@@ -28,6 +28,10 @@ struct NearbyMessage: Codable, Identifiable, Hashable {
     let type: NearbyMessageType
     let payload: Data?
     let createdAt: Date
+    /// Messages sharing this key may replace older queued messages that have
+    /// not started transmitting yet. This is intended for live positions,
+    /// where the newest value matters more than delivering every sample.
+    let coalescingKey: String?
 
     init(
         id: UUID = UUID(),
@@ -35,7 +39,8 @@ struct NearbyMessage: Codable, Identifiable, Hashable {
         senderName: String,
         type: NearbyMessageType,
         payload: Data? = nil,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        coalescingKey: String? = nil
     ) {
         self.id = id
         self.gameID = gameID
@@ -43,5 +48,6 @@ struct NearbyMessage: Codable, Identifiable, Hashable {
         self.type = type
         self.payload = payload
         self.createdAt = createdAt
+        self.coalescingKey = coalescingKey
     }
 }

@@ -22,11 +22,15 @@ struct LaserDuelView: View {
     @State private var lastTick = Date()
     @State private var lastPositionSentAt = Date.distantPast
     @State private var lastSentPosition = 0.5
+    @State private var lastPositionSampleAt = Date.distantPast
+    @State private var lastSampledShipX = 0.5
+    @State private var localShipVelocity = 0.0
     @State private var nextFireDate = Date.distantPast
     @State private var invulnerableUntil = Date.distantPast
     @State private var muzzleFlash = false
     @State private var remoteMuzzleFlash = false
     @State private var hitFlash = false
+    @State private var shotLandedFlash = false
     @State private var shipHitPulse = false
     @State private var showQuit = false
     @State private var showResult = false
@@ -126,6 +130,13 @@ struct LaserDuelView: View {
             UINotificationFeedbackGenerator().notificationOccurred(
                 winner == localPlayerID ? .success : .warning
             )
+        }
+        .onChange(of: state.lives) { oldLives, newLives in
+            let previousOpponentLives = oldLives[opponentID, default: LaserDuelGame.startingLives]
+            let currentOpponentLives = newLives[opponentID, default: LaserDuelGame.startingLives]
+            if currentOpponentLives < previousOpponentLives {
+                showShotLandedFeedback()
+            }
         }
         .onChange(of: rematchController.confirmedRoundNumber) { _, confirmedRound in
             guard let confirmedRound else { return }
@@ -304,24 +315,25 @@ struct LaserDuelView: View {
                     countdownOverlay
                 }
 
-                if hitFlash {
-                    Color.red.opacity(0.30)
-                    VStack(spacing: 6) {
-                        Image(systemName: "burst.fill")
-                            .font(.system(size: 66, weight: .bold))
-                        Text("DIRECT HIT")
-                            .font(.system(size: 16, weight: .black, design: .rounded))
-                            .tracking(1.5)
-                    }
-                    .foregroundStyle(.white, LaserDuelTheme.crimson)
-                    .transition(.opacity.combined(with: .scale))
-                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 27))
             .overlay(
                 RoundedRectangle(cornerRadius: 27)
-                    .stroke(localColor.opacity(0.24), lineWidth: 1.2)
+                    .stroke(
+                        hitFlash
+                            ? LaserDuelTheme.crimson
+                            : (shotLandedFlash ? LaserDuelTheme.success : localColor.opacity(0.24)),
+                        lineWidth: hitFlash || shotLandedFlash ? 4 : 1.2
+                    )
+                    .shadow(
+                        color: hitFlash
+                            ? LaserDuelTheme.crimson.opacity(0.9)
+                            : (shotLandedFlash ? LaserDuelTheme.success.opacity(0.75) : .clear),
+                        radius: hitFlash || shotLandedFlash ? 16 : 0
+                    )
             )
+            .animation(.easeOut(duration: 0.16), value: hitFlash)
+            .animation(.easeOut(duration: 0.16), value: shotLandedFlash)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0).onChanged { value in
@@ -387,10 +399,10 @@ struct LaserDuelView: View {
 
     private var enemyShip: some View {
         LaserDuelShip(color: opponentColor, isEnemy: true)
-            .opacity(0.48)
-            .scaleEffect(0.74)
+            .opacity(0.72)
+            .scaleEffect(0.78)
             .shadow(color: opponentColor.opacity(0.55), radius: 10)
-            .animation(.easeOut(duration: 0.12), value: remoteShipX)
+            .animation(.linear(duration: 0.05), value: remoteShipX)
     }
 
     private func projectileView(_ projectile: LaserDuelProjectile) -> some View {
@@ -496,6 +508,7 @@ struct LaserDuelView: View {
         let dt = min(max(date.timeIntervalSince(lastTick), 0), 0.035)
         lastTick = date
 
+        updateLocalVelocity(at: date)
         sendPositionIfNeeded(at: date)
 
         guard hasDuelStarted, !state.isFinished else { return }
@@ -555,6 +568,9 @@ struct LaserDuelView: View {
 
     private func registerLocalHit(at date: Date) {
         invulnerableUntil = date.addingTimeInterval(0.78)
+        let impact = UIImpactFeedbackGenerator(style: .heavy)
+        impact.prepare()
+        impact.impactOccurred(intensity: 0.90)
         UINotificationFeedbackGenerator().notificationOccurred(.error)
 
         withAnimation(.spring(response: 0.20, dampingFraction: 0.48)) {
@@ -579,6 +595,18 @@ struct LaserDuelView: View {
         }
     }
 
+    private func showShotLandedFeedback() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.62)) {
+            shotLandedFlash = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.52) {
+            withAnimation(.easeOut(duration: 0.24)) {
+                shotLandedFlash = false
+            }
+        }
+    }
+
     private func applyDamage(to playerID: String) {
         guard !state.isFinished,
               playerID == startPayload.playerOneID || playerID == startPayload.playerTwoID else {
@@ -598,20 +626,43 @@ struct LaserDuelView: View {
     private func sendPositionIfNeeded(at date: Date) {
         guard !state.isFinished else { return }
         let elapsed = date.timeIntervalSince(lastPositionSentAt)
-        guard elapsed >= 0.25,
-              abs(shipX - lastSentPosition) >= 0.025 || elapsed >= 1.0 else {
+        guard elapsed >= 0.05,
+              abs(shipX - lastSentPosition) >= 0.006 || elapsed >= 0.24 else {
             return
         }
         lastPositionSentAt = date
         lastSentPosition = shipX
-        sendAction(kind: .position, targetPlayerID: nil, x: shipX)
+        sendAction(
+            kind: .position,
+            targetPlayerID: nil,
+            x: shipX,
+            velocityX: localShipVelocity
+        )
+    }
+
+    private func updateLocalVelocity(at date: Date) {
+        let currentX = shipX
+        guard lastPositionSampleAt != .distantPast else {
+            lastPositionSampleAt = date
+            lastSampledShipX = currentX
+            return
+        }
+
+        let elapsed = date.timeIntervalSince(lastPositionSampleAt)
+        guard elapsed > 0.008 else { return }
+        let measuredVelocity = ((currentX - lastSampledShipX) / elapsed)
+            .clamped(to: -2.4...2.4)
+        localShipVelocity += (measuredVelocity - localShipVelocity) * 0.28
+        lastPositionSampleAt = date
+        lastSampledShipX = currentX
     }
 
     private func sendAction(
         kind: LaserDuelActionKind,
         eventID: UUID = UUID(),
         targetPlayerID: String?,
-        x: Double?
+        x: Double?,
+        velocityX: Double? = nil
     ) {
         let payload = LaserDuelActionPayload(
             sessionID: startPayload.sessionID,
@@ -620,14 +671,18 @@ struct LaserDuelView: View {
             kind: kind,
             playerID: localPlayerID,
             targetPlayerID: targetPlayerID,
-            x: x
+            x: x,
+            velocityX: velocityX
         )
         guard let data = try? JSONEncoder().encode(payload) else { return }
         nearbyService.send(.init(
             gameID: game.id,
             senderName: localPlayerName,
             type: .gameAction,
-            payload: data
+            payload: data,
+            coalescingKey: kind == .position
+                ? "ld.position"
+                : nil
         ))
     }
 
@@ -662,7 +717,8 @@ struct LaserDuelView: View {
         switch payload.kind {
         case .position:
             guard let x = payload.x else { return }
-            remoteShipX = x.clamped(to: 0.08...0.92)
+            let predictedX = x + (payload.velocityX ?? 0) * 0.04
+            remoteShipX = predictedX.clamped(to: 0.08...0.92)
 
         case .projectile:
             guard payload.targetPlayerID == localPlayerID,
@@ -719,7 +775,11 @@ struct LaserDuelView: View {
         lastTick = now
         lastPositionSentAt = .distantPast
         lastSentPosition = 0.5
+        lastPositionSampleAt = .distantPast
+        lastSampledShipX = 0.5
+        localShipVelocity = 0
         hitFlash = false
+        shotLandedFlash = false
         muzzleFlash = false
         remoteMuzzleFlash = false
         shipHitPulse = false
@@ -806,31 +866,27 @@ private struct LaserDuelShip: View {
 
     var body: some View {
         ZStack {
-            Capsule()
-                .fill(color.opacity(0.20))
-                .frame(width: 76, height: 30)
-                .blur(radius: 7)
-            RoundedRectangle(cornerRadius: 11)
-                .fill(LinearGradient(
-                    colors: [Color.white.opacity(0.78), color, color.opacity(0.35)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ))
-                .frame(width: 66, height: 25)
-            Capsule()
-                .fill(Color.black.opacity(0.64))
-                .frame(width: 30, height: 13)
-            Capsule()
-                .fill(color)
-                .frame(width: 9, height: 37)
-                .offset(y: -17)
-            Capsule()
+            Ellipse()
+                .fill(color.opacity(0.30))
+                .frame(width: 76, height: 42)
+                .blur(radius: 14)
+                .offset(y: 10)
+
+            Image("laser_duel_turret")
+                .resizable()
+                .interpolation(.high)
+                .antialiased(true)
+                .scaledToFit()
+                .frame(width: 92, height: 104)
+                .colorMultiply(color)
+
+            Circle()
                 .fill(.white)
-                .frame(width: 3, height: 29)
-                .offset(y: -17)
-            Circle().fill(.white).frame(width: 9, height: 9)
-                .shadow(color: color, radius: 8)
+                .frame(width: 11, height: 11)
+                .shadow(color: color, radius: 10)
+                .offset(y: 20)
         }
+        .frame(width: 96, height: 108)
         .rotationEffect(.degrees(isEnemy ? 180 : 0))
     }
 }

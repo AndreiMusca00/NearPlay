@@ -157,6 +157,8 @@ final class BluetoothTransport: NSObject, NearbyTransport {
     private struct PendingCentralWrite {
         let data: Data
         let session: NearbySessionToken?
+        let frameID: UUID
+        let coalescingKey: String?
         let completion: (() -> Void)?
     }
 
@@ -170,10 +172,14 @@ final class BluetoothTransport: NSObject, NearbyTransport {
         let centralID: UUID
         let session: NearbySessionToken?
         let kind: BluetoothEnvelopeKind
+        let frameID: UUID
+        let coalescingKey: String?
+        let isLastChunk: Bool
         let completion: (() -> Void)?
     }
 
     private var peripheralNotificationQueue: [PendingNotification] = []
+    private var peripheralNotificationFrameInProgress: UUID?
 
     // MARK: - NearbyTransport lifecycle
 
@@ -263,6 +269,7 @@ final class BluetoothTransport: NSObject, NearbyTransport {
         centralWriteQueue.removeAll()
         centralWriteInFlight = nil
         peripheralNotificationQueue.removeAll()
+        peripheralNotificationFrameInProgress = nil
 
         configuration = nil
         serviceUUID = nil
@@ -1047,12 +1054,26 @@ final class BluetoothTransport: NSObject, NearbyTransport {
             let chunks = framed.chunked(
                 maximumLength: maximumLength
             )
+            let frameID = UUID()
+            let coalescingKey = envelope.message?.coalescingKey
+
+            if let coalescingKey {
+                let frameAlreadyInFlight = centralWriteInFlight?.coalescingKey == coalescingKey
+                    ? centralWriteInFlight?.frameID
+                    : nil
+                centralWriteQueue.removeAll { pending in
+                    pending.coalescingKey == coalescingKey &&
+                        pending.frameID != frameAlreadyInFlight
+                }
+            }
 
             for (index, chunk) in chunks.enumerated() {
                 centralWriteQueue.append(
                     PendingCentralWrite(
                         data: chunk,
                         session: envelope.sessionToken,
+                        frameID: frameID,
+                        coalescingKey: coalescingKey,
                         completion:
                             index == chunks.count - 1
                             ? completion
@@ -1123,6 +1144,16 @@ final class BluetoothTransport: NSObject, NearbyTransport {
             let chunks = framed.chunked(
                 maximumLength: maximumLength
             )
+            let frameID = UUID()
+            let coalescingKey = envelope.message?.coalescingKey
+
+            if let coalescingKey {
+                let frameAlreadyInProgress = peripheralNotificationFrameInProgress
+                peripheralNotificationQueue.removeAll { pending in
+                    pending.coalescingKey == coalescingKey &&
+                        pending.frameID != frameAlreadyInProgress
+                }
+            }
 
             for (index, chunk) in chunks.enumerated() {
                 peripheralNotificationQueue.append(
@@ -1131,6 +1162,9 @@ final class BluetoothTransport: NSObject, NearbyTransport {
                         centralID: centralID,
                         session: envelope.sessionToken,
                         kind: envelope.kind,
+                        frameID: frameID,
+                        coalescingKey: coalescingKey,
+                        isLastChunk: index == chunks.count - 1,
                         completion:
                             index == chunks.count - 1
                             ? completion
@@ -1161,11 +1195,13 @@ final class BluetoothTransport: NSObject, NearbyTransport {
                 log("dropped stale peripheral notification", session: next.session)
 #endif
                 peripheralNotificationQueue.removeFirst()
+                clearNotificationFrameIfNoLongerQueued()
                 continue
             }
 
             guard let central = subscribedCentralsByID[next.centralID] else {
                 peripheralNotificationQueue.removeFirst()
+                clearNotificationFrameIfNoLongerQueued()
                 continue
             }
 
@@ -1181,9 +1217,23 @@ final class BluetoothTransport: NSObject, NearbyTransport {
                 return
             }
 
+            if peripheralNotificationFrameInProgress == nil {
+                peripheralNotificationFrameInProgress = next.frameID
+            }
             peripheralNotificationQueue.removeFirst()
+            if next.isLastChunk {
+                peripheralNotificationFrameInProgress = nil
+            }
             next.completion?()
         }
+    }
+
+    private func clearNotificationFrameIfNoLongerQueued() {
+        guard let frameID = peripheralNotificationFrameInProgress,
+              !peripheralNotificationQueue.contains(where: { $0.frameID == frameID }) else {
+            return
+        }
+        peripheralNotificationFrameInProgress = nil
     }
 
     // MARK: - Incoming frame handling
@@ -1751,6 +1801,7 @@ final class BluetoothTransport: NSObject, NearbyTransport {
         centralWriteQueue.removeAll()
         centralWriteInFlight = nil
         peripheralNotificationQueue.removeAll()
+        peripheralNotificationFrameInProgress = nil
 
         peripheralsByDiscoveryPeerID.removeAll()
         discoveryPeerByPeripheralID.removeAll()
@@ -2024,6 +2075,7 @@ final class BluetoothTransport: NSObject, NearbyTransport {
         peripheralNotificationQueue.removeAll {
             $0.session == disconnectedSession
         }
+        clearNotificationFrameIfNoLongerQueued()
 
         if let disconnectedCentralID,
            provisionalHandshakeByCentralID[disconnectedCentralID]?.session ==
@@ -2556,6 +2608,7 @@ extension BluetoothTransport: CBPeripheralManagerDelegate {
         peripheralNotificationQueue.removeAll {
             $0.centralID == central.identifier
         }
+        clearNotificationFrameIfNoLongerQueued()
 
         for invitation in cancelledIncoming {
             delegate?.nearbyTransport(

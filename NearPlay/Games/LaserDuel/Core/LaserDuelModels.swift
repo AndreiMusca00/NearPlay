@@ -36,6 +36,7 @@ struct LaserDuelActionPayload: Codable, Equatable {
     let playerID: String
     let targetPlayerID: String?
     let x: Double?
+    let velocityX: Double?
 }
 
 struct LaserDuelStatePayload: Codable, Equatable {

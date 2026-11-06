@@ -3,6 +3,7 @@ import SwiftUI
 enum LaserDuelTheme {
     static let cyan = Color(red: 0.10, green: 0.88, blue: 1.0)
     static let crimson = Color(red: 1.0, green: 0.18, blue: 0.34)
+    static let success = Color(red: 0.22, green: 1.0, blue: 0.54)
     static let violet = Color(red: 0.65, green: 0.25, blue: 1.0)
     static let background = LinearGradient(
         colors: [
