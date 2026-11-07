@@ -38,6 +38,7 @@ final class NearbyService: ObservableObject {
     private var outgoingInvitationExpiryWorkItem: DispatchWorkItem?
     private var invitationFeedbackExpiryWorkItem: DispatchWorkItem?
     private var nextSessionGeneration: UInt64 = 0
+    private var allowsOutgoingInvitations = true
 
     init(
         transport: NearbyTransport? = nil
@@ -51,7 +52,8 @@ final class NearbyService: ObservableObject {
     func start(
         gameID: String,
         playerName: String,
-        maxPlayers: Int
+        maxPlayers: Int,
+        allowsOutgoingInvitations: Bool = true
     ) {
         stop()
 
@@ -62,6 +64,7 @@ final class NearbyService: ObservableObject {
         currentGameID = gameID
         currentPlayerName = safeName
         currentMaxPlayers = maxPlayers
+        self.allowsOutgoingInvitations = allowsOutgoingInvitations
 
         let configuration = NearbyTransportConfiguration(
             gameID: gameID,
@@ -121,7 +124,7 @@ final class NearbyService: ObservableObject {
     // MARK: - Invite flow
 
     func invite(_ peer: NearbyPeer) {
-        guard connectedPeers.isEmpty else {
+        guard allowsOutgoingInvitations, connectedPeers.isEmpty else {
             return
         }
 

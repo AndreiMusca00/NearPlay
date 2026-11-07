@@ -8,6 +8,7 @@ enum PurchaseCatalog {
     static let ricochet = "com.nearplay.ricochet"
     static let tiltRace = "com.nearplay.tiltrace"
     static let laserDuel = "com.nearplay.laserduel"
+    static let swipeRush = "com.nearplay.swiperush"
 
     /// Produs Non-Consumable care deblochează toate jocurile premium actuale
     /// și toate jocurile premium adăugate în viitor.

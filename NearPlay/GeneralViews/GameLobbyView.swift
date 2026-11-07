@@ -10,6 +10,7 @@ struct GameLobbyView: View {
     let game: Game
     let onExitToHome: (() -> Void)?
     let automaticallyShowsTutorial: Bool
+    private let waitsForInvitation: Bool
 
     @StateObject private var nearbyService = NearbyService()
     @EnvironmentObject private var nearbyPermissions: NearbyPermissionsManager
@@ -28,6 +29,7 @@ struct GameLobbyView: View {
     @State private var shouldStartGame = false
     @State private var isStartingGame = false
     @State private var isExitingToHome = false
+    @State private var isLobbyVisible = false
 
     @State private var showNearbyPermissionAlert = false
     @State private var showNearPlaySettings = false
@@ -79,12 +81,14 @@ struct GameLobbyView: View {
     init(
         game: Game,
         onExitToHome: (() -> Void)? = nil,
-        automaticallyShowsTutorial: Bool = true
+        automaticallyShowsTutorial: Bool = true,
+        waitsForInvitation: Bool = false
     ) {
         self.game = game
         self.onExitToHome = onExitToHome
         self.automaticallyShowsTutorial =
             automaticallyShowsTutorial
+        self.waitsForInvitation = waitsForInvitation
     }
 
     // MARK: - Computed properties
@@ -293,20 +297,27 @@ struct GameLobbyView: View {
         .interactiveBackGestureEnabled(!isStartingGame)
         .preferredColorScheme(.dark)
         .onAppear {
+            isLobbyVisible = true
             // Nearby Play never triggers permission prompts from the lobby.
             // It only checks the known state and blocks discovery when access is missing.
             nearbyPermissions.refreshKnownStatuses()
 
-            if !presentTutorialIfNeeded() {
+            if waitsForInvitation {
+                updateNearbyPermissionGate()
+            } else if !presentTutorialIfNeeded() {
                 presentNearbyPermissionAlertIfNeeded()
             }
         }
         .onDisappear {
+            isLobbyVisible = false
             countdownTimer?.invalidate()
             countdownTimer = nil
 
             if !isStartingGame {
                 nearbyService.stop()
+                if waitsForInvitation {
+                    isSearching = false
+                }
             }
         }
         .onChange(
@@ -384,7 +395,11 @@ struct GameLobbyView: View {
         .fullScreenCover(
             isPresented: $showGameTutorial,
             onDismiss: {
-                presentNearbyPermissionAlertIfNeeded()
+                if waitsForInvitation {
+                    updateNearbyPermissionGate()
+                } else {
+                    presentNearbyPermissionAlertIfNeeded()
+                }
             }
         ) {
             GameTutorialView(
@@ -455,32 +470,84 @@ struct GameLobbyView: View {
 
     // MARK: - Searching content
 
+    @ViewBuilder
     private var searchingContent: some View {
-        VStack(spacing: 20) {
-            HoldToSearchButton(
-                progress: $progress,
-                isSearching: isSearching
-            ) {
-                startSearching()
-            }
-            .accessibilityLabel(
-                isSearching
-                    ? "Searching for nearby players"
-                    : "Start searching for nearby players"
-            )
-
-            nearbyPlayersSection
-                .frame(
-                    maxWidth: .infinity,
-                    maxHeight: .infinity,
-                    alignment: .top
+        if waitsForInvitation {
+            guestWaitingContent
+        } else {
+            VStack(spacing: 20) {
+                HoldToSearchButton(
+                    progress: $progress,
+                    isSearching: isSearching
+                ) {
+                    startSearching()
+                }
+                .accessibilityLabel(
+                    isSearching
+                        ? "Searching for nearby players"
+                        : "Start searching for nearby players"
                 )
+
+                nearbyPlayersSection
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(
-            maxWidth: .infinity,
-            maxHeight: .infinity,
-            alignment: .top
-        )
+    }
+
+    private var guestWaitingContent: some View {
+        VStack(spacing: 16) {
+            GameIconView(game: game, size: 76, cornerRadius: 21, symbolSize: 32)
+
+            Text("GUEST PLAY")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .tracking(1.5)
+                .foregroundStyle(LobbyTheme.brightBlue)
+
+            if !hasRequiredNearbyPermissions {
+                guestStatus(
+                    title: "Bluetooth needed",
+                    subtitle: missingNearbyPermissionsMessage
+                )
+
+                Button("Nearby Settings") { showNearPlaySettings = true }
+                    .buttonStyle(.borderedProminent)
+            } else if case .failed = nearbyService.connectionState {
+                guestStatus(
+                    title: "Couldn’t start Nearby Play",
+                    subtitle: "Try starting the guest lobby again."
+                )
+
+                Button("Try Again", action: startSearching)
+                    .buttonStyle(.borderedProminent)
+            } else {
+                guestStatus(
+                    title: "Waiting for an invitation",
+                    subtitle: "Ask your friend to open \(game.title) → Nearby Player and invite you from their lobby."
+                )
+
+                ProgressView()
+                    .tint(LobbyTheme.brightBlue)
+                    .accessibilityLabel("Waiting for a nearby invitation")
+            }
+        }
+        .padding(22)
+        .frame(maxWidth: 400)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func guestStatus(title: String, subtitle: String) -> some View {
+        VStack(spacing: 7) {
+            Text(title)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .accessibilityAddTraits(.isHeader)
+            Text(subtitle)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.62))
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Header
@@ -845,16 +912,24 @@ struct GameLobbyView: View {
     // MARK: - Permission gate
 
     private func updateNearbyPermissionGate() {
+        if waitsForInvitation {
+            guard isLobbyVisible, !isStartingGame, !isExitingToHome else { return }
+        }
+
         // Silent refreshes never turn an already-known `.allowed` state
         // into `.checking`, so this only reacts to meaningful permission changes.
         if hasRequiredNearbyPermissions {
             showNearbyPermissionAlert = false
+
+            if waitsForInvitation, nearbyService.connectionState == .idle {
+                startSearching()
+            }
         } else {
-            showNearbyPermissionAlert = true
+            showNearbyPermissionAlert = !waitsForInvitation
 
             // If discovery somehow started before a permission was revoked,
             // stop it immediately rather than leaving the lobby in a dead state.
-            if isSearching {
+            if isSearching || (waitsForInvitation && nearbyService.connectionState != .idle) {
                 nearbyService.stop()
                 isSearching = false
                 progress = 0
@@ -868,7 +943,7 @@ struct GameLobbyView: View {
         nearbyPermissions.refreshKnownStatuses()
 
         guard hasRequiredNearbyPermissions else {
-            showNearbyPermissionAlert = true
+            showNearbyPermissionAlert = !waitsForInvitation
             return
         }
 
@@ -877,7 +952,8 @@ struct GameLobbyView: View {
         nearbyService.start(
             gameID: game.id,
             playerName: safePlayerName,
-            maxPlayers: game.maxPlayers
+            maxPlayers: game.maxPlayers,
+            allowsOutgoingInvitations: !waitsForInvitation
         )
 
         withAnimation(
@@ -890,16 +966,16 @@ struct GameLobbyView: View {
             isSearching = true
         }
 
-        UIImpactFeedbackGenerator(
-            style: .medium
-        )
-        .impactOccurred()
+        if !waitsForInvitation {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
     }
 
     // MARK: - Automatic countdown
 
     private func scheduleHostCountdownIfPossible() {
-        guard isSupportedGame,
+        guard !waitsForInvitation,
+              isSupportedGame,
               hasConnectedOpponent,
               validLobbySession != nil,
               isLocalHost,
@@ -1035,7 +1111,8 @@ struct GameLobbyView: View {
     // MARK: - Starting games
 
     private func startSelectedGame() {
-        guard isSupportedGame,
+        guard !waitsForInvitation,
+              isSupportedGame,
               hasConnectedOpponent,
               validLobbySession != nil,
               isLocalHost,
@@ -1608,6 +1685,13 @@ struct GameLobbyView: View {
                 from: data
             )
 
+            guard let session = validLobbySession,
+                  payload.sessionID == session.sessionID,
+                  payload.playerOneID == session.hostPlayerID,
+                  payload.playerTwoID == session.guestPlayerID else {
+                return
+            }
+
             numberRushStartPayload = payload
             isStartingGame = true
             shouldStartGame = true
@@ -1737,10 +1821,19 @@ struct GameLobbyView: View {
 
     private func handleSwipeRushStart(_ data: Data) {
         do {
-            swipeRushStartPayload = try JSONDecoder().decode(
+            let payload = try JSONDecoder().decode(
                 SwipeRushStartPayload.self,
                 from: data
             )
+
+            guard let session = validLobbySession,
+                  payload.sessionID == session.sessionID,
+                  payload.playerOneID == session.hostPlayerID,
+                  payload.playerTwoID == session.guestPlayerID else {
+                return
+            }
+
+            swipeRushStartPayload = payload
             isStartingGame = true
             shouldStartGame = true
         } catch {
@@ -2099,6 +2192,7 @@ struct GameLobbyView: View {
     }
 
     private func cancelAndDismiss() {
+        isLobbyVisible = false
         nearbyService.stop()
         isStartingGame = false
         shouldStartGame = false

@@ -250,7 +250,8 @@ extension Game {
         supportedModes: [.nearby, .local],
         badge: .new,
         isPopular: true,
-        displayPriority: 84
+        displayPriority: 84,
+        productID: PurchaseCatalog.swipeRush
     )
 
     static let laserDuel = Game(

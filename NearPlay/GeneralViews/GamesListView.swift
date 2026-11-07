@@ -28,6 +28,8 @@ struct GamesListView: View {
 
     @State private var selectedGameForPurchase: Game?
 
+    @State private var pendingGuestLobby: NearbyGuestDestination?
+
     @State private var isLifetimePassPresented = false
 
     var body: some View {
@@ -137,6 +139,15 @@ struct GamesListView: View {
 
             }
 
+            .navigationDestination(for: NearbyGuestDestination.self) { destination in
+                GameLobbyView(
+                    game: destination.game,
+                    onExitToHome: { navigationPath = NavigationPath() },
+                    automaticallyShowsTutorial: false,
+                    waitsForInvitation: true
+                )
+            }
+
             .sheet(isPresented: $isEditingName) {
 
                 EditNameSheet(name: playerName)
@@ -147,19 +158,24 @@ struct GamesListView: View {
 
             }
 
-            .sheet(item: $selectedGameForPurchase) { game in
+            .sheet(item: $selectedGameForPurchase, onDismiss: openPendingGuestLobby) { game in
+                let offersGuestAccess = game.id == Game.numberRush.id || game.id == Game.swipeRush.id
 
-                GamePurchaseSheet(game: game) {
-
-                    selectedGameForPurchase = nil
-
-                    navigationPath.append(game)
-
-                }
+                GamePurchaseSheet(
+                    game: game,
+                    onPlay: {
+                        selectedGameForPurchase = nil
+                        navigationPath.append(game)
+                    },
+                    onJoinFriend: offersGuestAccess ? {
+                        pendingGuestLobby = NearbyGuestDestination(game: game)
+                        selectedGameForPurchase = nil
+                    } : nil
+                )
 
                 .environmentObject(purchaseManager)
 
-                .presentationDetents([.medium])
+                .presentationDetents(offersGuestAccess ? [.large] : [.medium])
 
                 .presentationDragIndicator(.visible)
 
@@ -208,6 +224,12 @@ struct GamesListView: View {
 
         }
 
+    }
+
+    private func openPendingGuestLobby() {
+        guard let destination = pendingGuestLobby else { return }
+        pendingGuestLobby = nil
+        navigationPath.append(destination)
     }
 
     // MARK: - Header
@@ -1318,6 +1340,10 @@ struct GamesListView: View {
 
     }
 
+}
+
+private struct NearbyGuestDestination: Hashable {
+    let game: Game
 }
 
 private enum GamesFilter {

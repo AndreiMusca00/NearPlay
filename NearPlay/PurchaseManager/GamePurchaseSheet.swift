@@ -4,6 +4,7 @@ import SwiftUI
 struct GamePurchaseSheet: View {
     let game: Game
     let onPlay: () -> Void
+    let onJoinFriend: (() -> Void)?
 
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +12,7 @@ struct GamePurchaseSheet: View {
     @State private var activePurchase: PurchaseChoice?
     @State private var purchaseCompleted = false
     @State private var statusMessage: String?
+    @State private var showsTutorial = false
 
     var body: some View {
         ZStack {
@@ -56,6 +58,10 @@ struct GamePurchaseSheet: View {
                                 bundlePurchaseButton
                             }
                         }
+
+                        if let onJoinFriend {
+                            guestActions(onJoinFriend: onJoinFriend)
+                        }
                     }
 
                     Text("Purchases are processed by the App Store and can be restored with the same Apple Account.")
@@ -70,12 +76,72 @@ struct GamePurchaseSheet: View {
             }
             .scrollIndicators(.hidden)
         }
+        .fullScreenCover(isPresented: $showsTutorial) {
+            GameTutorialView(
+                game: game,
+                onDismiss: { showsTutorial = false },
+                onNeverShowAgain: {
+                    GameTutorialPreference.dismiss(for: game.id)
+                    showsTutorial = false
+                }
+            )
+            .interactiveDismissDisabled()
+        }
         .task {
             if purchaseManager.product(for: game) == nil ||
                 purchaseManager.lifetimePassProduct == nil {
                 await purchaseManager.loadProducts()
             }
         }
+    }
+
+    private func guestActions(onJoinFriend: @escaping () -> Void) -> some View {
+        VStack(spacing: 5) {
+            Button(action: onJoinFriend) {
+                HStack(spacing: 12) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.cyan)
+                        .frame(width: 44, height: 44)
+                        .background(.cyan.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Join a friend")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text("Play for free with someone who has unlocked this game.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.cyan)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.cyan.opacity(0.065), in: RoundedRectangle(cornerRadius: 19))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 19)
+                        .strokeBorder(.cyan.opacity(0.24))
+                }
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                showsTutorial = true
+            } label: {
+                Label("How to play", systemImage: "info.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.cyan)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+        }
+        .disabled(activePurchase != nil)
     }
 
     private var closeRow: some View {

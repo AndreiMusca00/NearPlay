@@ -90,6 +90,21 @@
       "type" : "NonConsumable"
     },
     {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "B2674F39",
+      "localizations" : [
+        {
+          "description" : "Unlock Swipe Rush permanently.",
+          "displayName" : "Swipe Rush",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.nearplay.swiperush",
+      "referenceName" : "Swipe Rush Unlock",
+      "type" : "NonConsumable"
+    },
+    {
       "displayPrice" : "4.99",
       "familyShareable" : false,
       "internalID" : "AB93066B",
