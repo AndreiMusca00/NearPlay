@@ -238,6 +238,21 @@ extension Game {
         displayPriority: 85
     )
 
+    static let swipeRush = Game(
+        id: "swipe_rush",
+        title: "Swipe Rush",
+        shortDescription: "Swipe through rapid directions, build combos, and beat the clock.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_swipe_rush",
+        fallbackSystemImage: "arrow.up.and.down.and.arrow.left.and.right",
+        accentHex: "#FF3D9E",
+        supportedModes: [.nearby, .local],
+        badge: .new,
+        isPopular: true,
+        displayPriority: 84
+    )
+
     static let laserDuel = Game(
         id: "laser_duel",
         title: "Laser Duel",
@@ -259,6 +274,7 @@ extension Game {
         ricochet,
         tiltRace,
         tapFrenzy,
+        swipeRush,
         laserDuel,
         dotsAndBoxes,
         backgammon,

@@ -111,7 +111,30 @@ struct GameModeSelectionView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
+            headerControls
+
+            HStack(spacing: 12) {
+                GameIconView(game: game, size: 54, cornerRadius: 15, symbolSize: 23)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(game.title)
+                        .font(.system(size: 29, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .accessibilityAddTraits(.isHeader)
+
+                    Text("Choose how to play")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.60))
+                }
+            }
+        }
+        .padding(.bottom, 5)
+    }
+
+    private var headerControls: some View {
+        HStack(spacing: 8) {
             Button {
                 dismiss()
             } label: {
@@ -140,34 +163,6 @@ struct GameModeSelectionView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
-            .frame(width: 87, alignment: .leading)
-
-            Spacer()
-
-            VStack(spacing: 3) {
-                Text(game.title)
-                    .font(
-                        .system(
-                            size: 23,
-                            weight: .bold,
-                            design: .rounded
-                        )
-                    )
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-
-                Text("Choose how to play")
-                    .font(
-                        .system(
-                            size: 13,
-                            weight: .medium
-                        )
-                    )
-                    .foregroundStyle(
-                        GameModeSelectionTheme.cyan
-                    )
-            }
 
             Spacer()
 
@@ -190,7 +185,7 @@ struct GameModeSelectionView: View {
                                     lineWidth: 1
                                 )
 
-                            Image(systemName: "questionmark")
+                            Image(systemName: "info")
                                 .font(
                                     .system(
                                         size: 16,
@@ -201,7 +196,7 @@ struct GameModeSelectionView: View {
                                     GameModeSelectionTheme.cyan
                                 )
                         }
-                        .frame(width: 40, height: 40)
+                        .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("How to play")
@@ -225,7 +220,7 @@ struct GameModeSelectionView: View {
                         ? GameModeSelectionTheme.cyan
                         : Color.white
                     )
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
                     .background {
                         Circle()
                             .fill(Color.white.opacity(0.055))
@@ -249,9 +244,7 @@ struct GameModeSelectionView: View {
                     : "Add to liked games"
                 )
             }
-            .frame(width: 87, alignment: .trailing)
         }
-        .padding(.bottom, 5)
     }
 
     private func toggleFavorite() {

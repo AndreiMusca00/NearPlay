@@ -70,6 +70,9 @@ struct GameLobbyView: View {
     // Tap Frenzy
     @State private var tapFrenzyStartPayload: TapFrenzyStartPayload?
 
+    // Swipe Rush
+    @State private var swipeRushStartPayload: SwipeRushStartPayload?
+
     // Laser Duel
     @State private var laserDuelStartPayload: LaserDuelStartPayload?
 
@@ -104,6 +107,7 @@ struct GameLobbyView: View {
         game.id == Game.ricochet.id ||
         game.id == Game.tiltRace.id ||
         game.id == Game.tapFrenzy.id ||
+        game.id == Game.swipeRush.id ||
         game.id == Game.laserDuel.id
     }
 
@@ -1069,6 +1073,9 @@ struct GameLobbyView: View {
         case Game.tapFrenzy.id:
             startTapFrenzy()
 
+        case Game.swipeRush.id:
+            startSwipeRush()
+
         case Game.laserDuel.id:
             startLaserDuel()
 
@@ -1426,6 +1433,42 @@ struct GameLobbyView: View {
         }
     }
 
+    private func startSwipeRush() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+
+        let payload = SwipeRushStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState: SwipeRushGame.makeInitialState(
+                playerOneID: nearbyService.localPlayerID,
+                playerTwoID: firstPeer.id
+            )
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+            nearbyService.send(NearbyMessage(
+                gameID: game.id,
+                senderName: safePlayerName,
+                type: .gameStart,
+                payload: data
+            ))
+            swipeRushStartPayload = payload
+            shouldStartGame = true
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage = "Failed to start Swipe Rush."
+        }
+    }
+
     private func startLaserDuel() {
         guard let firstPeer = connectedOpponent,
               let session = validLobbySession else {
@@ -1517,6 +1560,9 @@ struct GameLobbyView: View {
 
             case Game.tapFrenzy.id:
                 handleTapFrenzyStart(data)
+
+            case Game.swipeRush.id:
+                handleSwipeRushStart(data)
 
             case Game.laserDuel.id:
                 handleLaserDuelStart(data)
@@ -1686,6 +1732,19 @@ struct GameLobbyView: View {
             shouldStartGame = true
         } catch {
             nearbyService.errorMessage = "Failed to start Tap Frenzy."
+        }
+    }
+
+    private func handleSwipeRushStart(_ data: Data) {
+        do {
+            swipeRushStartPayload = try JSONDecoder().decode(
+                SwipeRushStartPayload.self,
+                from: data
+            )
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Swipe Rush."
         }
     }
 
@@ -1945,6 +2004,25 @@ struct GameLobbyView: View {
                     playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
                     playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
                     initialState: TapFrenzyGame.makeInitialState(
+                        playerOneID: nearbyService.localPlayerID,
+                        playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer"
+                    )
+                ),
+                onExitToHome: exitToHome
+            )
+
+        case Game.swipeRush.id:
+            SwipeRushView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload: swipeRushStartPayload ?? SwipeRushStartPayload(
+                    sessionID: nearbyService.lobbySession?.sessionID ?? UUID().uuidString,
+                    playerOneID: nearbyService.localPlayerID,
+                    playerOneName: safePlayerName,
+                    playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
+                    playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
+                    initialState: SwipeRushGame.makeInitialState(
                         playerOneID: nearbyService.localPlayerID,
                         playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer"
                     )

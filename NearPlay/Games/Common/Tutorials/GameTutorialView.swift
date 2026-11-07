@@ -69,6 +69,7 @@ private enum TutorialArtworkKind {
     case ricochet(Int)
     case tiltRace(Int)
     case tapFrenzy(Int)
+    case swipeRush(Int)
     case laserDuel(Int)
 }
 
@@ -293,6 +294,32 @@ private struct GameTutorialDescriptor {
                         subtitle:
                             "Play live on two nearby iPhones, or take turns on one device. Both players receive the same target sequences; highest score wins.",
                         artwork: .tapFrenzy(2)
+                    )
+                ]
+            )
+
+        case Game.swipeRush.id:
+            return GameTutorialDescriptor(
+                accent: Color(red: 1.00, green: 0.24, blue: 0.62),
+                secondary: Color(red: 0.08, green: 0.91, blue: 1.00),
+                pages: [
+                    GameTutorialPage(
+                        title: "Start on the arrow",
+                        subtitle:
+                            "Touch the glowing target and swipe in the direction shown. Starting outside the target counts as a mistake.",
+                        artwork: .swipeRush(0)
+                    ),
+                    GameTutorialPage(
+                        title: "React before it expires",
+                        subtitle:
+                            "The ring shows your remaining time. Targets become smaller and faster as your score grows.",
+                        artwork: .swipeRush(1)
+                    ),
+                    GameTutorialPage(
+                        title: "Protect your combo",
+                        subtitle:
+                            "Fast correct swipes build a combo and earn bonus points. Both players receive the same sequence; highest score wins.",
+                        artwork: .swipeRush(2)
                     )
                 ]
             )
@@ -717,6 +744,14 @@ private struct TutorialArtworkView: View {
 
         case .tapFrenzy(let phase):
             TapFrenzyTutorialArtwork(
+                phase: phase,
+                accent: accent,
+                secondary: secondary,
+                isPulsing: isPulsing
+            )
+
+        case .swipeRush(let phase):
+            SwipeRushTutorialArtwork(
                 phase: phase,
                 accent: accent,
                 secondary: secondary,
@@ -1627,6 +1662,112 @@ private struct TapFrenzyTutorialArtwork: View {
             Text("\(score)")
                 .font(.system(size: 20, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
+        }
+    }
+}
+
+private struct SwipeRushTutorialArtwork: View {
+    let phase: Int
+    let accent: Color
+    let secondary: Color
+    let isPulsing: Bool
+
+    private var directionSymbol: String {
+        switch phase {
+        case 0: "arrow.right"
+        case 1: "arrow.up"
+        default: "arrow.left"
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 15) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color.black.opacity(0.30))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(accent.opacity(0.30), lineWidth: 1)
+                    }
+
+                ForEach(0..<4, id: \.self) { index in
+                    Image(systemName: directionSymbol)
+                        .font(.system(size: 18 + CGFloat(index * 5), weight: .black))
+                        .foregroundStyle(accent.opacity(0.04 + Double(index) * 0.025))
+                        .offset(
+                            x: CGFloat(index - 2) * 36,
+                            y: CGFloat(2 - index) * 31
+                        )
+                }
+
+                ZStack {
+                    Circle()
+                        .stroke(.white.opacity(0.08), lineWidth: 7)
+                        .frame(width: 110, height: 110)
+                    Circle()
+                        .trim(from: 0, to: phase == 1 ? (isPulsing ? 0.30 : 0.78) : 0.86)
+                        .stroke(
+                            phase == 1 ? secondary : accent,
+                            style: StrokeStyle(lineWidth: 7, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 110, height: 110)
+                        .shadow(color: accent.opacity(0.65), radius: 8)
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [.white.opacity(0.95), phase == 1 ? secondary : accent],
+                                center: .topLeading,
+                                startRadius: 2,
+                                endRadius: 65
+                            )
+                        )
+                        .frame(width: 94, height: 94)
+                        .shadow(color: accent.opacity(0.52), radius: 14)
+                    Image(systemName: directionSymbol)
+                        .font(.system(size: 39, weight: .black))
+                        .foregroundStyle(Color.black.opacity(0.70))
+                }
+                .scaleEffect(isPulsing ? 1.04 : 0.96)
+
+                if phase == 0 {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [accent.opacity(0.18), accent],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: isPulsing ? 106 : 74, height: 8)
+                        .shadow(color: accent, radius: 8)
+                        .offset(x: 54)
+                }
+
+                if phase == 2 {
+                    Text(isPulsing ? "COMBO ×8" : "+12")
+                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .frame(height: 40)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(secondary.opacity(0.50), lineWidth: 1))
+                        .offset(y: 78)
+                }
+            }
+            .frame(width: 220, height: 220)
+
+            Label(
+                phase == 0
+                    ? "SWIPE FROM THE TARGET"
+                    : (phase == 1 ? "BEAT THE TIMER" : "BUILD YOUR COMBO"),
+                systemImage:
+                    phase == 0
+                    ? "hand.draw.fill"
+                    : (phase == 1 ? "timer" : "flame.fill")
+            )
+            .font(.system(size: 12, weight: .black, design: .rounded))
+            .foregroundStyle(accent)
         }
     }
 }

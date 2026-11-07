@@ -167,6 +167,9 @@ struct GameEntryView: View {
         case Game.tapFrenzy.id:
             TapFrenzyLocalView(game: game)
 
+        case Game.swipeRush.id:
+            SwipeRushLocalView(game: game)
+
         default:
             unavailableDestination(
                 title: "Two Players"
