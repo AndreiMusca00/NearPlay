@@ -223,6 +223,21 @@ extension Game {
         productID: PurchaseCatalog.tiltRace
     )
 
+    static let tapFrenzy = Game(
+        id: "tap_frenzy",
+        title: "Tap Frenzy",
+        shortDescription: "Tap numbered targets in order and chase the highest score.",
+        minPlayers: 2,
+        maxPlayers: 2,
+        imageName: "game_tap_frenzy",
+        fallbackSystemImage: "hand.tap.fill",
+        accentHex: "#FF457F",
+        supportedModes: [.nearby, .local],
+        badge: .new,
+        isPopular: true,
+        displayPriority: 85
+    )
+
     static let laserDuel = Game(
         id: "laser_duel",
         title: "Laser Duel",
@@ -243,6 +258,7 @@ extension Game {
         ticTacToe,
         ricochet,
         tiltRace,
+        tapFrenzy,
         laserDuel,
         dotsAndBoxes,
         backgammon,

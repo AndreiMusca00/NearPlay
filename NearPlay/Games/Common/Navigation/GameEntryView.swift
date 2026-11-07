@@ -164,6 +164,9 @@ struct GameEntryView: View {
         case Game.tiltRace.id:
             TiltRaceLocalView(game: game)
 
+        case Game.tapFrenzy.id:
+            TapFrenzyLocalView(game: game)
+
         default:
             unavailableDestination(
                 title: "Two Players"

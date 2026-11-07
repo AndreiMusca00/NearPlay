@@ -45,31 +45,35 @@ struct GameModeSelectionView: View {
                     VStack(
                         spacing: compact ? 10 : 13
                     ) {
-                        modeButton(
-                            mode: .nearby,
-                            title: "Nearby Player",
-                            subtitle:
-                                "Play wirelessly with another iPhone.",
-                            systemName:
-                                "antenna.radiowaves.left.and.right",
-                            accent:
-                                GameModeSelectionTheme.cyan,
-                            action: onNearby
-                        )
+                        if game.supportedModes.contains(.nearby) {
+                            modeButton(
+                                mode: .nearby,
+                                title: "Nearby Player",
+                                subtitle:
+                                    "Play wirelessly with another iPhone.",
+                                systemName:
+                                    "antenna.radiowaves.left.and.right",
+                                accent:
+                                    GameModeSelectionTheme.cyan,
+                                action: onNearby
+                            )
+                        }
 
-                        modeButton(
-                            mode: .local,
-                            title: "Two Players",
-                            subtitle:
-                                "Take turns on the same iPhone.",
-                            systemName:
-                                "person.2.fill",
-                            accent:
-                                GameModeSelectionTheme.blue,
-                            action: onLocal
-                        )
+                        if game.supportedModes.contains(.local) {
+                            modeButton(
+                                mode: .local,
+                                title: "Two Players",
+                                subtitle:
+                                    "Take turns on the same iPhone.",
+                                systemName:
+                                    "person.2.fill",
+                                accent:
+                                    GameModeSelectionTheme.blue,
+                                action: onLocal
+                            )
+                        }
 
-                        if game.id != Game.tiltRace.id {
+                        if game.supportedModes.contains(.computer) {
                             computerCard(
                                 compact: compact
                             )
@@ -668,6 +672,10 @@ struct GameModeSelectionView: View {
 
         if availableCount >= 2 {
             return "Choose the way you want to play this round."
+        }
+
+        if game.supportedModes.contains(.local) {
+            return "Play together by passing the iPhone between rounds."
         }
 
         return "More ways to play are already planned for \(game.title)."

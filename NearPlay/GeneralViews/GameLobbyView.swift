@@ -67,6 +67,9 @@ struct GameLobbyView: View {
     // Tilt Race
     @State private var tiltRaceStartPayload: TiltRaceStartPayload?
 
+    // Tap Frenzy
+    @State private var tapFrenzyStartPayload: TapFrenzyStartPayload?
+
     // Laser Duel
     @State private var laserDuelStartPayload: LaserDuelStartPayload?
 
@@ -100,6 +103,7 @@ struct GameLobbyView: View {
         game.id == Game.dotsAndBoxes.id ||
         game.id == Game.ricochet.id ||
         game.id == Game.tiltRace.id ||
+        game.id == Game.tapFrenzy.id ||
         game.id == Game.laserDuel.id
     }
 
@@ -1062,6 +1066,9 @@ struct GameLobbyView: View {
         case Game.tiltRace.id:
             startTiltRace()
 
+        case Game.tapFrenzy.id:
+            startTapFrenzy()
+
         case Game.laserDuel.id:
             startLaserDuel()
 
@@ -1383,6 +1390,42 @@ struct GameLobbyView: View {
         }
     }
 
+    private func startTapFrenzy() {
+        guard let firstPeer = connectedOpponent,
+              let session = validLobbySession else {
+            isStartingGame = false
+            return
+        }
+
+        let payload = TapFrenzyStartPayload(
+            sessionID: session.sessionID,
+            playerOneID: nearbyService.localPlayerID,
+            playerOneName: safePlayerName,
+            playerTwoID: firstPeer.id,
+            playerTwoName: firstPeer.displayName,
+            initialState: TapFrenzyGame.makeInitialState(
+                playerOneID: nearbyService.localPlayerID,
+                playerTwoID: firstPeer.id
+            )
+        )
+
+        do {
+            let data = try JSONEncoder().encode(payload)
+            nearbyService.send(NearbyMessage(
+                gameID: game.id,
+                senderName: safePlayerName,
+                type: .gameStart,
+                payload: data
+            ))
+            tapFrenzyStartPayload = payload
+            shouldStartGame = true
+        } catch {
+            isStartingGame = false
+            hasStartedCountdown = false
+            nearbyService.errorMessage = "Failed to start Tap Frenzy."
+        }
+    }
+
     private func startLaserDuel() {
         guard let firstPeer = connectedOpponent,
               let session = validLobbySession else {
@@ -1471,6 +1514,9 @@ struct GameLobbyView: View {
 
             case Game.tiltRace.id:
                 handleTiltRaceStart(data)
+
+            case Game.tapFrenzy.id:
+                handleTapFrenzyStart(data)
 
             case Game.laserDuel.id:
                 handleLaserDuelStart(data)
@@ -1627,6 +1673,19 @@ struct GameLobbyView: View {
             shouldStartGame = true
         } catch {
             nearbyService.errorMessage = "Failed to start Tilt Race."
+        }
+    }
+
+    private func handleTapFrenzyStart(_ data: Data) {
+        do {
+            tapFrenzyStartPayload = try JSONDecoder().decode(
+                TapFrenzyStartPayload.self,
+                from: data
+            )
+            isStartingGame = true
+            shouldStartGame = true
+        } catch {
+            nearbyService.errorMessage = "Failed to start Tap Frenzy."
         }
     }
 
@@ -1867,6 +1926,25 @@ struct GameLobbyView: View {
                     playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
                     playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
                     initialState: TiltRaceGame.makeInitialState(
+                        playerOneID: nearbyService.localPlayerID,
+                        playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer"
+                    )
+                ),
+                onExitToHome: exitToHome
+            )
+
+        case Game.tapFrenzy.id:
+            TapFrenzyView(
+                game: game,
+                nearbyService: nearbyService,
+                localPlayerName: safePlayerName,
+                startPayload: tapFrenzyStartPayload ?? TapFrenzyStartPayload(
+                    sessionID: nearbyService.lobbySession?.sessionID ?? UUID().uuidString,
+                    playerOneID: nearbyService.localPlayerID,
+                    playerOneName: safePlayerName,
+                    playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer",
+                    playerTwoName: nearbyService.connectedPeers.first?.displayName ?? "Peer",
+                    initialState: TapFrenzyGame.makeInitialState(
                         playerOneID: nearbyService.localPlayerID,
                         playerTwoID: nearbyService.connectedPeers.first?.id ?? "peer"
                     )

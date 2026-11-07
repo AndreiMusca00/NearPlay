@@ -68,6 +68,7 @@ private enum TutorialArtworkKind {
     case dotsAndBoxes(Int)
     case ricochet(Int)
     case tiltRace(Int)
+    case tapFrenzy(Int)
     case laserDuel(Int)
 }
 
@@ -266,6 +267,32 @@ private struct GameTutorialDescriptor {
                         subtitle:
                             "Race live on two iPhones, or take turns on the same track and compare times. First through gate ten — or the fastest time — wins.",
                         artwork: .tiltRace(2)
+                    )
+                ]
+            )
+
+        case Game.tapFrenzy.id:
+            return GameTutorialDescriptor(
+                accent: Color(red: 1.00, green: 0.27, blue: 0.52),
+                secondary: Color(red: 0.12, green: 0.88, blue: 0.95),
+                pages: [
+                    GameTutorialPage(
+                        title: "Tap in order",
+                        subtitle:
+                            "Five numbered targets appear together. Tap 1, 2, 3, 4, then 5 — a correct target disappears as you advance.",
+                        artwork: .tapFrenzy(0)
+                    ),
+                    GameTutorialPage(
+                        title: "Build a fast score",
+                        subtitle:
+                            "Every completed sequence gives 10 points plus a speed bonus. A target tapped out of order costs 2 points.",
+                        artwork: .tapFrenzy(1)
+                    ),
+                    GameTutorialPage(
+                        title: "Two ways to duel",
+                        subtitle:
+                            "Play live on two nearby iPhones, or take turns on one device. Both players receive the same target sequences; highest score wins.",
+                        artwork: .tapFrenzy(2)
                     )
                 ]
             )
@@ -682,6 +709,14 @@ private struct TutorialArtworkView: View {
 
         case .tiltRace(let phase):
             TiltRaceTutorialArtwork(
+                phase: phase,
+                accent: accent,
+                secondary: secondary,
+                isPulsing: isPulsing
+            )
+
+        case .tapFrenzy(let phase):
+            TapFrenzyTutorialArtwork(
                 phase: phase,
                 accent: accent,
                 secondary: secondary,
@@ -1484,6 +1519,114 @@ private struct TiltRaceTutorialArtwork: View {
             )
             .font(.system(size: 12, weight: .black, design: .rounded))
             .foregroundStyle(accent)
+        }
+    }
+}
+
+private struct TapFrenzyTutorialArtwork: View {
+    let phase: Int
+    let accent: Color
+    let secondary: Color
+    let isPulsing: Bool
+
+    private let points: [CGPoint] = [
+        CGPoint(x: 0.24, y: 0.25),
+        CGPoint(x: 0.72, y: 0.19),
+        CGPoint(x: 0.49, y: 0.49),
+        CGPoint(x: 0.22, y: 0.76),
+        CGPoint(x: 0.75, y: 0.72)
+    ]
+
+    var body: some View {
+        VStack(spacing: 15) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color.black.opacity(0.28))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(accent.opacity(0.30), lineWidth: 1)
+                    }
+
+                ForEach(0..<5, id: \.self) { index in
+                    let number = index + 1
+                    let isNext = phase == 0 && number == (isPulsing ? 2 : 1)
+
+                    ZStack {
+                        if isNext {
+                            Circle()
+                                .stroke(targetColor(number).opacity(0.45), lineWidth: 2)
+                                .frame(width: 52, height: 52)
+                        }
+                        Circle()
+                            .fill(targetColor(number))
+                            .frame(width: phase == 1 ? 39 : 44, height: phase == 1 ? 39 : 44)
+                            .shadow(color: targetColor(number).opacity(0.55), radius: 8)
+                        Text("\(number)")
+                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .foregroundStyle(Color.black.opacity(0.72))
+                    }
+                    .position(
+                        x: points[index].x * 220,
+                        y: points[index].y * 220
+                    )
+                }
+
+                if phase == 1 {
+                    Text(isPulsing ? "+16" : "+10")
+                        .font(.system(size: 25, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 15)
+                        .frame(height: 44)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(secondary.opacity(0.55), lineWidth: 1))
+                }
+
+                if phase == 2 {
+                    HStack(spacing: 13) {
+                        scoreCard(name: "P1", score: 124, color: accent)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 15, weight: .black))
+                            .foregroundStyle(.white.opacity(0.42))
+                        scoreCard(name: "P2", score: 138, color: secondary)
+                    }
+                    .padding(14)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+                }
+            }
+            .frame(width: 220, height: 220)
+
+            Label(
+                phase == 0
+                    ? "TAP 1 → 5"
+                    : (phase == 1 ? "SPEED BUILDS SCORE" : "60 SECONDS EACH"),
+                systemImage:
+                    phase == 0
+                    ? "hand.tap.fill"
+                    : (phase == 1 ? "bolt.fill" : "person.2.fill")
+            )
+            .font(.system(size: 12, weight: .black, design: .rounded))
+            .foregroundStyle(accent)
+        }
+    }
+
+    private func targetColor(_ number: Int) -> Color {
+        switch number {
+        case 1: return accent
+        case 2: return Color.orange
+        case 3: return secondary
+        case 4: return Color.purple
+        default: return Color.green
+        }
+    }
+
+    private func scoreCard(name: String, score: Int, color: Color) -> some View {
+        VStack(spacing: 3) {
+            Text(name)
+                .font(.system(size: 8, weight: .black, design: .rounded))
+                .foregroundStyle(color)
+            Text("\(score)")
+                .font(.system(size: 20, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
         }
     }
 }
