@@ -29,7 +29,6 @@ struct BattleshipPlacementView: View {
     @State private var dragLocation: CGPoint = .zero
 
     private let boardPadding: CGFloat = 8
-    private let boardSpacing: CGFloat = 3
 
     private var unplacedShipIDs: Set<String> {
         let placedIDs = Set(
@@ -126,10 +125,7 @@ struct BattleshipPlacementView: View {
                         orientation:
                             draggedOrientation,
                         cellSize: metrics.cellSize,
-                        isSelected: true,
-                        isSunk: false,
-                        showsDragHint: false,
-                        showsGlow: false
+                        isSelected: true
                     )
                     .position(dragLocation)
                     .allowsHitTesting(false)
@@ -196,11 +192,23 @@ struct BattleshipPlacementView: View {
             return
         }
 
-        let coordinate =
-            nearestBoardCoordinate(
-                for: location,
-                metrics: metrics
-            )
+        let boardFrame = CGRect(
+            x: metrics.boardContainerLeft + boardPadding,
+            y: metrics.boardTop + boardPadding,
+            width: metrics.boardSize,
+            height: metrics.boardSize
+        )
+        guard boardFrame.contains(location) else {
+            clearDrag()
+            return
+        }
+
+        let coordinate = nearestShipOrigin(
+            for: location,
+            length: definition.length,
+            boardFrame: boardFrame,
+            cellSize: metrics.cellSize
+        )
 
         onShipDropped(
             definition,
@@ -210,52 +218,27 @@ struct BattleshipPlacementView: View {
         clearDrag()
     }
 
-    private func nearestBoardCoordinate(
+    private func nearestShipOrigin(
         for location: CGPoint,
-        metrics: PlacementMetrics
+        length: Int,
+        boardFrame: CGRect,
+        cellSize: CGFloat
     ) -> BattleshipCoordinate {
-        let step =
-            metrics.cellSize + boardSpacing
-
-        let gridLeft =
-            metrics.boardContainerLeft +
-            boardPadding
-
-        let gridTop =
-            metrics.boardTop +
-            boardPadding
-
-        let rawColumn = Int(
-            round(
-                (
-                    location.x -
-                    gridLeft -
-                    metrics.cellSize / 2
-                ) / step
-            )
+        let spacing = BattleshipGridLayout.spacing
+        let step = cellSize + spacing
+        let footprint = BattleshipGridLayout.shipBounds(
+            length: length,
+            orientation: draggedOrientation,
+            cellSize: cellSize,
+            spacing: spacing
         )
-
-        let rawRow = Int(
-            round(
-                (
-                    location.y -
-                    gridTop -
-                    metrics.cellSize / 2
-                ) / step
-            )
-        )
-
+        let rawColumn = Int(((location.x - boardFrame.minX - footprint.midX) / step).rounded())
+        let rawRow = Int(((location.y - boardFrame.minY - footprint.midY) / step).rounded())
+        let columns = draggedOrientation == .horizontal ? length : 1
+        let rows = draggedOrientation == .vertical ? length : 1
         return BattleshipCoordinate(
-            row:
-                min(
-                    max(rawRow, 0),
-                    BattleshipGame.boardSize - 1
-                ),
-            column:
-                min(
-                    max(rawColumn, 0),
-                    BattleshipGame.boardSize - 1
-                )
+            row: min(max(rawRow, 0), BattleshipGame.boardSize - rows),
+            column: min(max(rawColumn, 0), BattleshipGame.boardSize - columns)
         )
     }
 
@@ -438,12 +421,7 @@ struct BattleshipPlacementView: View {
                     length: ship.length,
                     orientation: .horizontal,
                     cellSize: metrics.dockCellSize,
-                    isSelected: false,
-                    isSunk: false,
-                    showsDragHint:
-                        isUnplaced &&
-                        draggedShipID == nil,
-                    showsGlow: false
+                    cellSpacing: 0
                 )
                 .opacity(
                     isUnplaced &&
@@ -456,7 +434,7 @@ struct BattleshipPlacementView: View {
                         metrics.dockCellSize *
                         CGFloat(ship.length),
                     height:
-                        metrics.dockCellSize * 0.82
+                        metrics.dockCellSize
                 )
                 .contentShape(Rectangle())
                 .gesture(
@@ -738,15 +716,7 @@ private struct PlacementMetrics {
             )
         )
 
-        cellSize =
-            (
-                boardSize -
-                3 *
-                CGFloat(
-                    BattleshipGame.boardSize - 1
-                )
-            ) /
-            CGFloat(BattleshipGame.boardSize)
+        cellSize = BattleshipGridLayout.cellSize(for: boardSize)
 
         dockCellSize = min(
             cellSize,

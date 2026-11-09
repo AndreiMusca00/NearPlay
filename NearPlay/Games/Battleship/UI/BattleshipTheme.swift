@@ -36,27 +36,6 @@ enum BattleshipTheme {
             endPoint: .trailing
         )
 
-    static let shipGradient =
-        LinearGradient(
-            colors: [
-                cyan.opacity(0.94),
-                blue.opacity(0.88),
-                purple.opacity(0.84)
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-
-    static let sunkGradient =
-        LinearGradient(
-            colors: [
-                Color.red.opacity(0.92),
-                Color.orange.opacity(0.72)
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-
     static let background =
         LinearGradient(
             colors: [

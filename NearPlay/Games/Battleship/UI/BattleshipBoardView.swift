@@ -24,18 +24,12 @@ struct BattleshipBoardView: View {
     @State
     private var activePlacementShipID: String?
 
-    private let spacing: CGFloat = 3
+    private let spacing = BattleshipGridLayout.spacing
     private let dragThreshold: CGFloat = 8
 
     var body: some View {
         GeometryReader { geometry in
-            let cellSize =
-                (
-                    geometry.size.width -
-                    spacing *
-                    CGFloat(BattleshipGame.boardSize - 1)
-                ) /
-                CGFloat(BattleshipGame.boardSize)
+            let cellSize = BattleshipGridLayout.cellSize(for: geometry.size.width)
 
             let boardFrame = geometry.frame(
                 in: .named(
@@ -151,8 +145,7 @@ struct BattleshipBoardView: View {
                 orientation: ship.orientation,
                 cellSize: cellSize,
                 isSelected: mode == .placement,
-                isSunk: ship.isSunk,
-                showsGlow: mode != .placement
+                isSunk: ship.isSunk
             )
             .opacity(
                 hiddenShipID == ship.id
@@ -165,6 +158,21 @@ struct BattleshipBoardView: View {
             )
             .zIndex(10)
             .allowsHitTesting(false)
+
+            if mode == .ownBattle {
+                ForEach(ship.occupiedCoordinates.filter(ship.hits.contains)) { coordinate in
+                    let step = cellSize + spacing
+                    BattleshipCellView.markView(ship.isSunk ? .sunk : .hit)
+                        .frame(width: cellSize, height: cellSize)
+                        .clipped()
+                        .position(
+                            x: CGFloat(coordinate.column) * step + cellSize / 2,
+                            y: CGFloat(coordinate.row) * step + cellSize / 2
+                        )
+                        .zIndex(11)
+                        .allowsHitTesting(false)
+                }
+            }
         }
     }
 
@@ -222,15 +230,13 @@ struct BattleshipBoardView: View {
                     )
             }
 
-            guard let shipID =
-                    activePlacementShipID else {
+            guard let shipID = activePlacementShipID,
+                  let center = draggedCenter(for: shipID, translation: value.translation,
+                                            cellSize: cellSize, boardFrame: boardFrame) else {
                 return
             }
 
-            onPlacedShipDragChanged?(
-                shipID,
-                value.location
-            )
+            onPlacedShipDragChanged?(shipID, center)
         }
         .onEnded { value in
             guard mode == .placement,
@@ -249,15 +255,28 @@ struct BattleshipBoardView: View {
 
             activePlacementShipID = nil
 
-            guard let shipID else {
+            guard let shipID,
+                  let center = draggedCenter(for: shipID, translation: value.translation,
+                                            cellSize: cellSize, boardFrame: boardFrame) else {
                 return
             }
 
-            onPlacedShipDragEnded?(
-                shipID,
-                value.location
-            )
+            onPlacedShipDragEnded?(shipID, center)
         }
+    }
+
+    private func draggedCenter(
+        for shipID: String,
+        translation: CGSize,
+        cellSize: CGFloat,
+        boardFrame: CGRect
+    ) -> CGPoint? {
+        guard let ship = ownBoard.ships.first(where: { $0.id == shipID }) else { return nil }
+        let center = shipCenter(for: ship, cellSize: cellSize)
+        return CGPoint(
+            x: boardFrame.minX + center.x + translation.width,
+            y: boardFrame.minY + center.y + translation.height
+        )
     }
 
     private func shipID(
@@ -277,19 +296,9 @@ struct BattleshipBoardView: View {
             return nil
         }
 
-        // Reversed makes the visually uppermost ship win
-        // in the unlikely event that two hit rectangles touch.
-        let matchingShip =
-            ownBoard.ships.reversed().first {
-                ship in
-
-                shipRect(
-                    for: ship,
-                    cellSize: cellSize
-                )
-                .insetBy(dx: -3, dy: -3)
-                .contains(localPoint)
-            }
+        let matchingShip = ownBoard.ships.first { ship in
+            shipRect(for: ship, cellSize: cellSize).contains(localPoint)
+        }
 
         return matchingShip?.id
     }
@@ -298,43 +307,13 @@ struct BattleshipBoardView: View {
         for ship: BattleshipPlacedShip,
         cellSize: CGFloat
     ) -> CGRect {
-        let step = cellSize + spacing
-
-        let leadingX =
-            CGFloat(ship.origin.column) * step
-
-        let topY =
-            CGFloat(ship.origin.row) * step
-
-        switch ship.orientation {
-        case .horizontal:
-            let height = cellSize * 0.80
-
-            return CGRect(
-                x: leadingX,
-                y:
-                    topY +
-                    (cellSize - height) / 2,
-                width:
-                    cellSize *
-                    CGFloat(ship.length),
-                height: height
-            )
-
-        case .vertical:
-            let width = cellSize * 0.80
-
-            return CGRect(
-                x:
-                    leadingX +
-                    (cellSize - width) / 2,
-                y: topY,
-                width: width,
-                height:
-                    cellSize *
-                    CGFloat(ship.length)
-            )
-        }
+        BattleshipGridLayout.shipBounds(
+            length: ship.length,
+            orientation: ship.orientation,
+            cellSize: cellSize,
+            spacing: spacing,
+            origin: ship.origin
+        )
     }
 
     private func shipCenter(
@@ -387,8 +366,8 @@ private struct BattleshipCellView: View {
                 lineWidth: 0.8
             )
 
-            if let mark {
-                markView(mark)
+            if let mark, mode != .ownBattle || mark == .miss {
+                Self.markView(mark)
             }
         }
     }
@@ -420,7 +399,7 @@ private struct BattleshipCellView: View {
     }
 
     @ViewBuilder
-    private func markView(
+    static func markView(
         _ mark: BattleshipCellMark
     ) -> some View {
         switch mark {
