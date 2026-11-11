@@ -83,11 +83,10 @@ struct GamesListView: View {
                             }
                             .frame(maxWidth: .infinity)
                         }
+                        .padding(.bottom, 20)
                     }
 
                     .scrollIndicators(.hidden)
-
-                    .padding(.bottom, 20)
 
                 }
 
@@ -100,6 +99,8 @@ struct GamesListView: View {
                     alignment: .top
 
                 )
+
+                .ignoresSafeArea(.container, edges: .bottom)
 
             }
 

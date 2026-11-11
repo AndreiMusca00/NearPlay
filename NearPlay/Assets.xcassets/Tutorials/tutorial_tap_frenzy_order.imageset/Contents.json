@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "tutorial_tap_frenzy_order.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

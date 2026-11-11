@@ -71,6 +71,43 @@ private enum TutorialArtworkKind {
     case tapFrenzy(Int)
     case swipeRush(Int)
     case laserDuel(Int)
+
+    var screenshotAspectRatio: CGFloat? {
+        switch self {
+        case .numberRush:
+            1170.0 / 1710.0
+        case .battleship(let phase):
+            switch phase {
+            case 0: 1142.0 / 1425.0
+            case 1: 1142.0 / 1335.0
+            default: 1142.0 / 1212.0
+            }
+        case .connectFour:
+            1142.0 / 1200.0
+        case .backgammon:
+            2030.0 / 1038.0
+        case .tiltRace(let phase):
+            phase == 2 ? 1126.0 / 1480.0 : 1126.0 / 1136.0
+        case .tapFrenzy(let phase):
+            switch phase {
+            case 0: 1126.0 / 1838.0
+            case 1: 1126.0 / 2038.0
+            case 2: 1126.0 / 1888.0
+            default: 1126.0 / 1553.0
+            }
+        case .swipeRush(let phase):
+            switch phase {
+            case 0: 1126.0 / 1818.0
+            case 1: 1126.0 / 1768.0
+            case 2: 1126.0 / 1666.0
+            default: 1126.0 / 2108.0
+            }
+        case .dotsAndBoxes(let phase):
+            phase == 2 ? 1042.0 / 1250.0 : 1
+        default:
+            nil
+        }
+    }
 }
 
 private struct GameTutorialDescriptor {
@@ -98,19 +135,19 @@ private struct GameTutorialDescriptor {
                     GameTutorialPage(
                         title: "Find the next number",
                         subtitle:
-                            "Watch the target, then locate that number in the shuffled grid before your opponent does.",
+                            "Read the target above the grid, then tap that number. Start at 1 and work your way up to 100.",
                         artwork: .numberRush(0)
                     ),
                     GameTutorialPage(
                         title: "Beat the clock",
                         subtitle:
-                            "A correct answer adds a little time. A wrong answer or an expired timer passes the turn.",
+                            "A correct number earns a point, adds one second, and keeps your turn. A wrong tap or an empty timer passes the turn.",
                         artwork: .numberRush(1)
                     ),
                     GameTutorialPage(
                         title: "Own the grid",
                         subtitle:
-                            "Every correct number scores a point and keeps your color on the board. Highest score wins.",
+                            "Cyan marks Player 1’s numbers and purple marks Player 2’s. After all 100 numbers are found, the highest score wins.",
                         artwork: .numberRush(2)
                     )
                 ]
@@ -124,19 +161,19 @@ private struct GameTutorialDescriptor {
                     GameTutorialPage(
                         title: "Deploy your fleet",
                         subtitle:
-                            "Place every ship on your grid. Tap a placed ship to rotate it, then lock in your fleet.",
+                            "Drag all five ships from the dock onto your grid. Each ship must fit inside the board without overlapping another ship.",
                         artwork: .battleship(0)
                     ),
                     GameTutorialPage(
-                        title: "Choose a target",
+                        title: "Rotate and get ready",
                         subtitle:
-                            "On your turn, tap one square on the enemy grid. Hits glow red; misses remain marked.",
+                            "Tap a placed ship to rotate it. When all five ships are in position, tap Ready for Battle.",
                         artwork: .battleship(1)
                     ),
                     GameTutorialPage(
-                        title: "Sink them all",
+                        title: "Attack enemy waters",
                         subtitle:
-                            "Track your hits and uncover every section of every enemy ship to win the battle.",
+                            "Tap one enemy square per turn, even after a hit. Orange means a hit and a gray dot means a miss. Sink every enemy ship to win.",
                         artwork: .battleship(2)
                     )
                 ]
@@ -148,21 +185,21 @@ private struct GameTutorialDescriptor {
                 secondary: Color(red: 0.66, green: 0.23, blue: 1.00),
                 pages: [
                     GameTutorialPage(
-                        title: "Drop a disc",
+                        title: "Tap a column",
                         subtitle:
-                            "Choose a column. Your disc falls into the lowest open space, then the turn changes.",
+                            "Tap any column with space. Your disc drops into its lowest empty slot. Cyan is Player 1 and purple is Player 2.",
                         artwork: .connectFour(0)
                     ),
                     GameTutorialPage(
-                        title: "Build and block",
+                        title: "Take turns",
                         subtitle:
-                            "Grow your own line while watching for threats. One smart block can save the round.",
+                            "Players take turns dropping one disc. The ACTIVE card shows who plays next. On one iPhone, pass it after each move.",
                         artwork: .connectFour(1)
                     ),
                     GameTutorialPage(
-                        title: "Connect four",
+                        title: "Connect four to win",
                         subtitle:
-                            "Make a line of four discs horizontally, vertically, or diagonally before your opponent.",
+                            "Join four of your discs horizontally, vertically, or diagonally. Here, Player 2 wins with four purple discs in a column.",
                         artwork: .connectFour(2)
                     )
                 ]
@@ -174,21 +211,21 @@ private struct GameTutorialDescriptor {
                 secondary: Color(red: 0.49, green: 0.22, blue: 0.12),
                 pages: [
                     GameTutorialPage(
-                        title: "Roll and move",
+                        title: "Roll the dice",
                         subtitle:
-                            "Move your checkers using each die. A double gives you four moves of the same value.",
+                            "Tap the dice button in the middle of the board. Each die gives one move. A double gives four moves of the same value.",
                         artwork: .backgammon(0)
                     ),
                     GameTutorialPage(
-                        title: "Hit and re-enter",
+                        title: "Move your checkers",
                         subtitle:
-                            "Land on a lone enemy checker to send it to the bar. Bar checkers must re-enter first.",
+                            "Drag a checker to a highlighted destination. A point with two opposing checkers is blocked. Checkers on the bar must re-enter first.",
                         artwork: .backgammon(1)
                     ),
                     GameTutorialPage(
-                        title: "Race them home",
+                        title: "Confirm and bear off",
                         subtitle:
-                            "Bring all your checkers into your home board, then bear every checker off to win.",
+                            "Use both dice whenever possible. The checkmark confirms your turn and the circular arrow undoes moves. Bring all 15 checkers home, then bear them off to win.",
                         artwork: .backgammon(2)
                     )
                 ]
@@ -202,19 +239,19 @@ private struct GameTutorialDescriptor {
                     GameTutorialPage(
                         title: "Draw one edge",
                         subtitle:
-                            "Connect two neighboring dots with one horizontal or vertical line on each turn.",
+                            "Tap an unused line between two neighboring dots. Add one horizontal or vertical edge on your turn.",
                         artwork: .dotsAndBoxes(0)
                     ),
                     GameTutorialPage(
                         title: "Close a box",
                         subtitle:
-                            "Draw the fourth edge around a square to claim it in your color and score a point.",
+                            "Complete the fourth side of a square to claim it and earn one point. Here, Player 2 has claimed the pink box.",
                         artwork: .dotsAndBoxes(1)
                     ),
                     GameTutorialPage(
-                        title: "Keep the turn",
+                        title: "Claim a box, play again",
                         subtitle:
-                            "Completing a box lets you play again. Claim more boxes than your opponent to win.",
+                            "Closing a box gives you another move. Cyan is Player 1 and pink is Player 2. When the board is full, the most boxes wins.",
                         artwork: .dotsAndBoxes(2)
                     )
                 ]
@@ -252,21 +289,21 @@ private struct GameTutorialDescriptor {
                 secondary: Color(red: 0.07, green: 0.82, blue: 1.00),
                 pages: [
                     GameTutorialPage(
-                        title: "Tilt like a tray",
+                        title: "Tilt to steer",
                         subtitle:
                             "Hold the iPhone flat and tilt it naturally. The glowing orb rolls in the direction you lean.",
                         artwork: .tiltRace(0)
                     ),
                     GameTutorialPage(
-                        title: "Follow the numbers",
+                        title: "One gate at a time",
                         subtitle:
-                            "Guide the orb into the glowing gate. Once you reach it, it disappears and the next numbered gate is revealed.",
+                            "Roll into the glowing ring. That gate disappears and the next one appears elsewhere. Keep going from 1 to 10.",
                         artwork: .tiltRace(1)
                     ),
                     GameTutorialPage(
-                        title: "Clear all ten",
+                        title: "Race the clock",
                         subtitle:
-                            "Race live on two iPhones, or take turns on the same track and compare times. First through gate ten — or the fastest time — wins.",
+                            "On one iPhone, finish all ten gates, then pass it to Player 2: the fastest time wins. Nearby, race live to gate ten.",
                         artwork: .tiltRace(2)
                     )
                 ]
@@ -280,20 +317,26 @@ private struct GameTutorialDescriptor {
                     GameTutorialPage(
                         title: "Tap in order",
                         subtitle:
-                            "Five numbered targets appear together. Tap 1, 2, 3, 4, then 5 — a correct target disappears as you advance.",
+                            "Follow the number above the arena. Start with 1, then tap 2, 3, 4 and 5 in order.",
                         artwork: .tapFrenzy(0)
                     ),
                     GameTutorialPage(
-                        title: "Build a fast score",
+                        title: "Follow the moving targets",
                         subtitle:
-                            "Every completed sequence gives 10 points plus a speed bonus. A target tapped out of order costs 2 points.",
+                            "Targets change position regularly. The glowing ring marks the next number to tap, even after the targets relocate.",
                         artwork: .tapFrenzy(1)
                     ),
                     GameTutorialPage(
-                        title: "Two ways to duel",
+                        title: "Finish the sequence",
                         subtitle:
-                            "Play live on two nearby iPhones, or take turns on one device. Both players receive the same target sequences; highest score wins.",
+                            "Correct targets disappear. Here, 1–3 are gone: tap 4, then 5. Finishing a sequence earns 10 points plus a speed bonus.",
                         artwork: .tapFrenzy(2)
+                    ),
+                    GameTutorialPage(
+                        title: "Make every second count",
+                        subtitle:
+                            "You have 60 seconds. A wrong number costs 2 points. Play nearby or pass one iPhone between runs; the highest score wins.",
+                        artwork: .tapFrenzy(3)
                     )
                 ]
             )
@@ -306,20 +349,26 @@ private struct GameTutorialDescriptor {
                     GameTutorialPage(
                         title: "Start on the arrow",
                         subtitle:
-                            "Touch the glowing target and swipe in the direction shown. Starting outside the target counts as a mistake.",
+                            "Put your finger inside the glowing circle, then swipe in the arrow’s direction. Here, swipe right.",
                         artwork: .swipeRush(0)
                     ),
                     GameTutorialPage(
-                        title: "React before it expires",
+                        title: "Follow each new arrow",
                         subtitle:
-                            "The ring shows your remaining time. Targets become smaller and faster as your score grows.",
+                            "The next target can point in a new direction. Here, swipe down. The outer ring shows the time left for that target.",
                         artwork: .swipeRush(1)
                     ),
                     GameTutorialPage(
-                        title: "Protect your combo",
+                        title: "Avoid wrong swipes",
                         subtitle:
-                            "Fast correct swipes build a combo and earn bonus points. Both players receive the same sequence; highest score wins.",
+                            "A wrong direction, a late swipe, or starting outside the target costs 3 points and resets your combo.",
                         artwork: .swipeRush(2)
+                    ),
+                    GameTutorialPage(
+                        title: "Build your combo",
+                        subtitle:
+                            "Fast correct swipes earn points and grow your combo. Both players get 60 seconds and the same sequence; highest score wins.",
+                        artwork: .swipeRush(3)
                     )
                 ]
             )
@@ -491,6 +540,12 @@ private struct StandardGameTutorialView: View {
     ) -> some View {
         GeometryReader { geometry in
             let compact = geometry.size.height < 560
+            let maximumArtworkHeight = max(200, geometry.size.height - (compact ? 150 : 180))
+            let aspectRatio = page.artwork.screenshotAspectRatio ?? 1
+            let artworkWidth = max(0, min(
+                geometry.size.width - 40,
+                min(360, maximumArtworkHeight * aspectRatio)
+            ))
 
             ScrollView {
                 VStack(spacing: compact ? 16 : 24) {
@@ -500,11 +555,12 @@ private struct StandardGameTutorialView: View {
                         kind: page.artwork,
                         accent: descriptor.accent,
                         secondary: descriptor.secondary,
-                        isPulsing: isPulsing
+                        isPulsing: isPulsing,
+                        availableWidth: artworkWidth
                     )
                     .frame(
                         maxWidth: .infinity,
-                        minHeight: compact ? 250 : 310
+                        minHeight: page.artwork.screenshotAspectRatio == nil ? (compact ? 250 : 310) : nil
                     )
 
                     VStack(spacing: 9) {
@@ -652,34 +708,44 @@ private struct TutorialArtworkView: View {
     let accent: Color
     let secondary: Color
     let isPulsing: Bool
+    let availableWidth: CGFloat
+
+    private var usesScreenshot: Bool {
+        kind.screenshotAspectRatio != nil
+    }
 
     var body: some View {
         ZStack {
-            RoundedRectangle(
-                cornerRadius: 30,
-                style: .continuous
-            )
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.047, green: 0.078, blue: 0.137),
-                        Color(red: 0.027, green: 0.051, blue: 0.098)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+            if !usesScreenshot {
+                RoundedRectangle(
+                    cornerRadius: 30,
+                    style: .continuous
                 )
-            )
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.047, green: 0.078, blue: 0.137),
+                            Color(red: 0.027, green: 0.051, blue: 0.098)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
 
-            RoundedRectangle(
-                cornerRadius: 30,
-                style: .continuous
-            )
-            .stroke(Color.white.opacity(0.09), lineWidth: 1)
+                RoundedRectangle(
+                    cornerRadius: 30,
+                    style: .continuous
+                )
+                .stroke(Color.white.opacity(0.09), lineWidth: 1)
+            }
 
             artwork
-                .padding(22)
+                .padding(usesScreenshot ? 0 : 22)
         }
-        .frame(width: 292, height: 300)
+        .frame(
+            width: usesScreenshot ? availableWidth : 292,
+            height: usesScreenshot ? nil : 300
+        )
         .shadow(color: Color.black.opacity(0.28), radius: 24, y: 14)
     }
 
@@ -690,40 +756,35 @@ private struct TutorialArtworkView: View {
             NumberRushTutorialArtwork(
                 phase: phase,
                 accent: accent,
-                secondary: secondary,
-                isPulsing: isPulsing
+                secondary: secondary
             )
 
         case .battleship(let phase):
             BattleshipTutorialArtwork(
                 phase: phase,
                 accent: accent,
-                secondary: secondary,
-                isPulsing: isPulsing
+                secondary: secondary
             )
 
         case .connectFour(let phase):
             ConnectFourTutorialArtwork(
                 phase: phase,
                 accent: accent,
-                secondary: secondary,
-                isPulsing: isPulsing
+                secondary: secondary
             )
 
         case .backgammon(let phase):
             BackgammonTutorialArtwork(
                 phase: phase,
                 accent: accent,
-                secondary: secondary,
-                isPulsing: isPulsing
+                secondary: secondary
             )
 
         case .dotsAndBoxes(let phase):
             DotsAndBoxesTutorialArtwork(
                 phase: phase,
                 accent: accent,
-                secondary: secondary,
-                isPulsing: isPulsing
+                secondary: secondary
             )
 
         case .ricochet(let phase):
@@ -738,24 +799,21 @@ private struct TutorialArtworkView: View {
             TiltRaceTutorialArtwork(
                 phase: phase,
                 accent: accent,
-                secondary: secondary,
-                isPulsing: isPulsing
+                secondary: secondary
             )
 
         case .tapFrenzy(let phase):
             TapFrenzyTutorialArtwork(
                 phase: phase,
                 accent: accent,
-                secondary: secondary,
-                isPulsing: isPulsing
+                secondary: secondary
             )
 
         case .swipeRush(let phase):
             SwipeRushTutorialArtwork(
                 phase: phase,
                 accent: accent,
-                secondary: secondary,
-                isPulsing: isPulsing
+                secondary: secondary
             )
 
         case .laserDuel(let phase):
@@ -769,602 +827,127 @@ private struct TutorialArtworkView: View {
     }
 }
 
-private struct NumberRushTutorialArtwork: View {
-    let phase: Int
-    let accent: Color
-    let secondary: Color
-    let isPulsing: Bool
-
-    private let values = [
-        18, 3, 24, 7, 13,
-        21, 9, 1, 16, 5,
-        14, 22, 11, 2, 19,
-        6, 17, 25, 10, 4,
-        12, 8, 20, 15, 23
-    ]
-
-    var body: some View {
-        if phase == 0 {
-            VStack(spacing: 13) {
-                Label("FIND 7", systemImage: "scope")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundStyle(accent)
-
-                LazyVGrid(
-                    columns: Array(
-                        repeating: GridItem(.fixed(38), spacing: 6),
-                        count: 5
-                    ),
-                    spacing: 6
-                ) {
-                    ForEach(values, id: \.self) { value in
-                        Text("\(value)")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
-                            .background {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(
-                                        value == 7
-                                        ? accent.opacity(0.22)
-                                        : Color.white.opacity(0.045)
-                                    )
-                            }
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(
-                                        value == 7
-                                        ? accent
-                                        : Color.white.opacity(0.08),
-                                        lineWidth: value == 7 ? 2 : 1
-                                    )
-                            }
-                            .scaleEffect(
-                                value == 7 && isPulsing ? 1.08 : 1
-                            )
-                    }
-                }
-            }
-        } else if phase == 1 {
-            VStack(spacing: 22) {
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.08), lineWidth: 14)
-                    Circle()
-                        .trim(from: 0, to: 0.72)
-                        .stroke(
-                            accent,
-                            style: StrokeStyle(
-                                lineWidth: 14,
-                                lineCap: .round
-                            )
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .shadow(color: accent.opacity(0.55), radius: 10)
-
-                    VStack(spacing: 2) {
-                        Text("3.6")
-                            .font(.system(size: 38, weight: .black, design: .rounded))
-                        Text("SECONDS")
-                            .font(.system(size: 9, weight: .black, design: .rounded))
-                            .tracking(1.3)
-                            .foregroundStyle(.white.opacity(0.46))
-                    }
-                    .foregroundStyle(.white)
-                }
-                .frame(width: 148, height: 148)
-
-                Label("CORRECT  +1 SEC", systemImage: "plus.circle.fill")
-                    .font(.system(size: 13, weight: .black, design: .rounded))
-                    .foregroundStyle(accent)
-            }
-        } else {
-            VStack(spacing: 22) {
-                HStack(spacing: 12) {
-                    scoreCard(title: "YOU", score: 12, color: accent)
-                    scoreCard(title: "RIVAL", score: 9, color: secondary)
-                }
-
-                HStack(spacing: 8) {
-                    ForEach(0..<7, id: \.self) { index in
-                        Circle()
-                            .stroke(
-                                index < 4 ? accent : secondary,
-                                lineWidth: 3
-                            )
-                            .frame(width: 24, height: 24)
-                            .shadow(
-                                color: (index < 4 ? accent : secondary).opacity(0.55),
-                                radius: 5
-                            )
-                    }
-                }
-
-                Label("EVERY NUMBER COUNTS", systemImage: "trophy.fill")
-                    .font(.system(size: 12, weight: .black, design: .rounded))
-                    .foregroundStyle(accent)
-            }
-        }
-    }
-
-    private func scoreCard(
-        title: String,
-        score: Int,
-        color: Color
-    ) -> some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(.system(size: 9, weight: .black, design: .rounded))
-                .foregroundStyle(color)
-            Text("\(score)")
-                .font(.system(size: 29, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
-        }
-        .frame(width: 96, height: 76)
-        .background {
-            RoundedRectangle(cornerRadius: 18)
-                .fill(color.opacity(0.11))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(color.opacity(0.52), lineWidth: 1)
-        }
-    }
-}
-
-private struct BattleshipTutorialArtwork: View {
-    let phase: Int
-    let accent: Color
-    let secondary: Color
-    let isPulsing: Bool
-
-    var body: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                battleGrid
-
-                if phase == 0 {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [accent, secondary],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: 108, height: 23)
-                        .offset(x: -28, y: -54)
-
-                    Capsule()
-                        .fill(accent.opacity(0.82))
-                        .frame(width: 74, height: 23)
-                        .rotationEffect(.degrees(90))
-                        .offset(x: 55, y: 35)
-                } else {
-                    ForEach(0..<5, id: \.self) { index in
-                        let positions: [CGSize] = [
-                            CGSize(width: -72, height: -70),
-                            CGSize(width: 36, height: -36),
-                            CGSize(width: 72, height: 0),
-                            CGSize(width: -36, height: 36),
-                            CGSize(width: 0, height: 72)
-                        ]
-
-                        Circle()
-                            .fill(index < (phase == 1 ? 2 : 5) ? Color.red : Color.white.opacity(0.35))
-                            .frame(width: 16, height: 16)
-                            .overlay {
-                                Circle()
-                                    .stroke(Color.white.opacity(0.72), lineWidth: 1)
-                            }
-                            .shadow(
-                                color: index < (phase == 1 ? 2 : 5)
-                                    ? Color.red.opacity(0.8)
-                                    : .clear,
-                                radius: 7
-                            )
-                            .offset(positions[index])
-                    }
-
-                    if phase == 1 {
-                        Image(systemName: "scope")
-                            .font(.system(size: 52, weight: .medium))
-                            .foregroundStyle(accent)
-                            .shadow(color: accent.opacity(0.65), radius: 12)
-                            .scaleEffect(isPulsing ? 1.06 : 0.94)
-                    }
-                }
-            }
-            .frame(width: 220, height: 220)
-
-            Label(
-                phase == 0
-                    ? "PLACE & ROTATE"
-                    : (phase == 1 ? "SELECT A SQUARE" : "FLEET DESTROYED"),
-                systemImage:
-                    phase == 0
-                    ? "arrow.triangle.2.circlepath"
-                    : (phase == 1 ? "scope" : "flame.fill")
-            )
-            .font(.system(size: 12, weight: .black, design: .rounded))
-            .foregroundStyle(phase == 2 ? Color.red : accent)
-        }
-    }
-
-    private var battleGrid: some View {
-        LazyVGrid(
-            columns: Array(
-                repeating: GridItem(.fixed(26), spacing: 4),
-                count: 7
-            ),
-            spacing: 4
-        ) {
-            ForEach(0..<49, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(Color(red: 0.05, green: 0.16, blue: 0.24))
-                    .frame(width: 26, height: 26)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 5)
-                            .stroke(accent.opacity(0.14), lineWidth: 0.7)
-                    }
-            }
-        }
-    }
-}
-
 private struct ConnectFourTutorialArtwork: View {
     let phase: Int
     let accent: Color
     let secondary: Color
-    let isPulsing: Bool
 
-    private var cyanIndexes: Set<Int> {
+    private var imageName: String {
         switch phase {
-        case 0: return [35, 36, 37]
-        case 1: return [28, 35, 36, 37]
-        default: return [14, 22, 30, 38]
+        case 0: "tutorial_connect_four_drop"
+        case 1: "tutorial_connect_four_turns"
+        default: "tutorial_connect_four_win"
         }
     }
 
-    private var purpleIndexes: Set<Int> {
+    private var imageDescription: String {
         switch phase {
-        case 0: return [38, 39]
-        case 1: return [29, 38, 39]
-        default: return [35, 36, 37]
+        case 0:
+            "Player 1 has placed a cyan disc in the first column. Player 2 is active. An arrow shows how a disc drops down the second column."
+        case 1:
+            "A cyan disc and a purple disc occupy the bottom row. An arrow points to Player 1's highlighted ACTIVE card."
+        default:
+            "Four purple discs form a vertical winning line in the first column. Player 2 wins."
         }
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: phase == 0 ? "arrow.down" : "circle.grid.3x3.fill")
-                .font(.system(size: 22, weight: .black))
-                .foregroundStyle(accent)
-                .offset(x: phase == 0 ? -61 : 0)
-                .scaleEffect(isPulsing && phase == 0 ? 1.12 : 1)
-
-            LazyVGrid(
-                columns: Array(
-                    repeating: GridItem(.fixed(26), spacing: 5),
-                    count: 7
-                ),
-                spacing: 5
-            ) {
-                ForEach(0..<42, id: \.self) { index in
-                    Circle()
-                        .fill(discColor(for: index))
-                        .frame(width: 26, height: 26)
-                        .overlay {
-                            Circle()
-                                .stroke(
-                                    winningIndexes.contains(index)
-                                    ? Color.white.opacity(0.85)
-                                    : Color.white.opacity(0.07),
-                                    lineWidth:
-                                        winningIndexes.contains(index)
-                                        ? 2
-                                        : 1
-                                )
-                        }
-                        .shadow(
-                            color:
-                                winningIndexes.contains(index)
-                                ? accent.opacity(0.75)
-                                : .clear,
-                            radius: 7
-                        )
+        Image(imageName)
+            .resizable()
+            .scaledToFit()
+            .overlay {
+                GeometryReader { geometry in
+                    annotations(in: geometry.size)
                 }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
-            .padding(12)
-            .background {
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                accent.opacity(0.22),
-                                secondary.opacity(0.18)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
+            .accessibilityLabel(imageDescription)
+    }
 
-            Text(
-                phase == 0
-                ? "CHOOSE A COLUMN"
-                : (phase == 1 ? "WATCH THE THREAT" : "FOUR CONNECTED")
+    @ViewBuilder
+    private func annotations(in size: CGSize) -> some View {
+        let color = phase == 1 ? accent : secondary
+        let lineWidth = max(2, size.width * 0.007)
+
+        switch phase {
+        case 0:
+            RoundedRectangle(cornerRadius: size.width * 0.06)
+                .fill(color.opacity(0.10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: size.width * 0.06)
+                        .stroke(color.opacity(0.85), style: StrokeStyle(lineWidth: lineWidth, dash: [5, 4]))
+                }
+                .frame(width: size.width * 0.13, height: size.height * 0.76)
+                .position(x: size.width * 0.236, y: size.height * 0.415)
+
+            TutorialArrow(
+                start: CGPoint(x: 0.236, y: 0.19),
+                control: CGPoint(x: 0.236, y: 0.40),
+                end: CGPoint(x: 0.236, y: 0.67)
             )
-            .font(.system(size: 11, weight: .black, design: .rounded))
-            .tracking(1.1)
-            .foregroundStyle(accent)
-        }
-    }
+            .stroke(color, style: StrokeStyle(lineWidth: lineWidth + 1, lineCap: .round, lineJoin: .round))
 
-    private var winningIndexes: Set<Int> {
-        phase == 2 ? cyanIndexes : []
-    }
+            Image(systemName: "hand.tap.fill")
+                .font(.system(size: size.width * 0.065, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(8)
+                .background(color, in: Circle())
+                .position(x: size.width * 0.236, y: size.height * 0.10)
 
-    private func discColor(
-        for index: Int
-    ) -> Color {
-        if cyanIndexes.contains(index) {
-            return accent
-        }
+            callout("TAP A COLUMN", color: color, width: size.width * 0.48)
+                .position(x: size.width * 0.61, y: size.height * 0.10)
 
-        if purpleIndexes.contains(index) {
-            return secondary
-        }
+        case 1:
+            RoundedRectangle(cornerRadius: size.width * 0.055)
+                .stroke(color, lineWidth: lineWidth)
+                .shadow(color: color.opacity(0.65), radius: 8)
+                .frame(width: size.width * 0.48, height: size.height * 0.158)
+                .position(x: size.width * 0.245, y: size.height * 0.91)
 
-        return Color.black.opacity(0.34)
-    }
-}
-
-private struct BackgammonTutorialArtwork: View {
-    let phase: Int
-    let accent: Color
-    let secondary: Color
-    let isPulsing: Bool
-
-    var body: some View {
-        VStack(spacing: 15) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(Color(red: 0.24, green: 0.11, blue: 0.065))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22)
-                            .stroke(accent.opacity(0.55), lineWidth: 2)
-                    }
-
-                HStack(spacing: 5) {
-                    ForEach(0..<8, id: \.self) { index in
-                        VStack(spacing: 0) {
-                            TriangleShape()
-                                .fill(index.isMultiple(of: 2) ? accent.opacity(0.72) : secondary.opacity(0.75))
-                            TriangleShape()
-                                .fill(index.isMultiple(of: 2) ? secondary.opacity(0.75) : accent.opacity(0.72))
-                                .rotationEffect(.degrees(180))
-                        }
-                    }
-                }
-                .padding(12)
-
-                checkerStack
-
-                if phase == 0 {
-                    HStack(spacing: 9) {
-                        die(5)
-                        die(3)
-                    }
-                } else if phase == 1 {
-                    VStack(spacing: 4) {
-                        Text("BAR")
-                            .font(.system(size: 9, weight: .black, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.5))
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 30, height: 30)
-                            .overlay {
-                                Circle().stroke(secondary, lineWidth: 3)
-                            }
-                    }
-                    .scaleEffect(isPulsing ? 1.07 : 0.95)
-                } else {
-                    HStack(spacing: 5) {
-                        ForEach(0..<5, id: \.self) { _ in
-                            Circle()
-                                .fill(accent)
-                                .frame(width: 25, height: 25)
-                        }
-                    }
-                    .padding(8)
-                    .background {
-                        Capsule()
-                            .fill(Color.black.opacity(0.45))
-                    }
-                    .offset(y: 72)
-                }
-            }
-            .frame(width: 238, height: 196)
-
-            Label(
-                phase == 0
-                ? "USE BOTH DICE"
-                : (phase == 1 ? "RE-ENTER FIRST" : "BEAR THEM OFF"),
-                systemImage:
-                    phase == 0
-                    ? "dice.fill"
-                    : (phase == 1 ? "arrow.uturn.down" : "flag.checkered")
+            TutorialArrow(
+                start: CGPoint(x: 0.70, y: 0.63),
+                control: CGPoint(x: 0.69, y: 0.84),
+                end: CGPoint(x: 0.48, y: 0.91)
             )
+            .stroke(color, style: StrokeStyle(lineWidth: lineWidth + 1, lineCap: .round, lineJoin: .round))
+
+            callout("PLAYER 1 NEXT", color: color, width: size.width * 0.56)
+                .position(x: size.width * 0.65, y: size.height * 0.56)
+
+        default:
+            Capsule()
+                .fill(color.opacity(0.13))
+                .overlay {
+                    Capsule().stroke(.white.opacity(0.90), lineWidth: lineWidth)
+                }
+                .shadow(color: color.opacity(0.65), radius: 10)
+                .frame(width: size.width * 0.14, height: size.height * 0.52)
+                .position(x: size.width * 0.104, y: size.height * 0.535)
+
+            TutorialArrow(
+                start: CGPoint(x: 0.47, y: 0.32),
+                control: CGPoint(x: 0.29, y: 0.27),
+                end: CGPoint(x: 0.18, y: 0.37)
+            )
+            .stroke(color, style: StrokeStyle(lineWidth: lineWidth + 1, lineCap: .round, lineJoin: .round))
+
+            callout("4 IN A ROW", color: color, width: size.width * 0.48)
+                .position(x: size.width * 0.63, y: size.height * 0.26)
+        }
+    }
+
+    private func callout(_ text: String, color: Color, width: CGFloat) -> some View {
+        Text(text)
             .font(.system(size: 12, weight: .black, design: .rounded))
-            .foregroundStyle(accent)
-        }
-    }
-
-    private var checkerStack: some View {
-        HStack {
-            VStack(spacing: -8) {
-                ForEach(0..<3, id: \.self) { _ in
-                    Circle()
-                        .fill(accent)
-                        .frame(width: 27, height: 27)
-                        .overlay {
-                            Circle().stroke(.white.opacity(0.35), lineWidth: 1)
-                        }
-                }
-            }
-
-            Spacer()
-
-            VStack(spacing: -8) {
-                ForEach(0..<3, id: \.self) { _ in
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 27, height: 27)
-                        .overlay {
-                            Circle().stroke(secondary, lineWidth: 2)
-                        }
-                }
-            }
-        }
-        .padding(.horizontal, 22)
-        .offset(y: -52)
-    }
-
-    private func die(
-        _ value: Int
-    ) -> some View {
-        Text("\(value)")
-            .font(.system(size: 22, weight: .black, design: .rounded))
-            .foregroundStyle(Color(red: 0.18, green: 0.08, blue: 0.04))
-            .frame(width: 43, height: 43)
-            .background {
-                RoundedRectangle(cornerRadius: 11)
-                    .fill(accent)
-            }
-            .shadow(color: accent.opacity(0.55), radius: 10)
-    }
-}
-
-private struct TriangleShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-            path.closeSubpath()
-        }
-    }
-}
-
-private struct DotsAndBoxesTutorialArtwork: View {
-    let phase: Int
-    let accent: Color
-    let secondary: Color
-    let isPulsing: Bool
-
-    var body: some View {
-        VStack(spacing: 17) {
-            Canvas { context, size in
-                let inset: CGFloat = 18
-                let step = (size.width - inset * 2) / 3
-
-                if phase >= 1 {
-                    let boxRect = CGRect(
-                        x: inset + step,
-                        y: inset + step,
-                        width: step,
-                        height: step
-                    )
-                    context.fill(
-                        Path(boxRect),
-                        with: .color(accent.opacity(0.18))
-                    )
-                }
-
-                for row in 0..<4 {
-                    for column in 0..<4 {
-                        let point = CGPoint(
-                            x: inset + CGFloat(column) * step,
-                            y: inset + CGFloat(row) * step
-                        )
-                        let dot = Path(
-                            ellipseIn: CGRect(
-                                x: point.x - 5,
-                                y: point.y - 5,
-                                width: 10,
-                                height: 10
-                            )
-                        )
-                        context.fill(dot, with: .color(.white))
-                    }
-                }
-
-                let edges = edgesForPhase(step: step, inset: inset)
-                for (start, end, color) in edges {
-                    var path = Path()
-                    path.move(to: start)
-                    path.addLine(to: end)
-                    context.stroke(
-                        path,
-                        with: .color(color),
-                        style: StrokeStyle(
-                            lineWidth: 7,
-                            lineCap: .round
-                        )
-                    )
-                }
-            }
-            .frame(width: 220, height: 220)
-            .scaleEffect(isPulsing && phase == 0 ? 1.025 : 1)
-
-            Label(
-                phase == 0
-                ? "ONE EDGE PER TURN"
-                : (phase == 1 ? "BOX CLAIMED" : "SCORE + PLAY AGAIN"),
-                systemImage:
-                    phase == 0
-                    ? "line.diagonal"
-                    : (phase == 1 ? "square.fill" : "plus.circle.fill")
-            )
-            .font(.system(size: 12, weight: .black, design: .rounded))
-            .foregroundStyle(accent)
-        }
-    }
-
-    private func edgesForPhase(
-        step: CGFloat,
-        inset: CGFloat
-    ) -> [(CGPoint, CGPoint, Color)] {
-        func point(_ row: Int, _ column: Int) -> CGPoint {
-            CGPoint(
-                x: inset + CGFloat(column) * step,
-                y: inset + CGFloat(row) * step
-            )
-        }
-
-        if phase == 0 {
-            return [
-                (point(1, 1), point(1, 2), accent)
-            ]
-        }
-
-        var edges: [(CGPoint, CGPoint, Color)] = [
-            (point(1, 1), point(1, 2), accent),
-            (point(1, 1), point(2, 1), accent),
-            (point(1, 2), point(2, 2), secondary),
-            (point(2, 1), point(2, 2), accent)
-        ]
-
-        if phase == 2 {
-            edges.append(contentsOf: [
-                (point(0, 0), point(0, 1), secondary),
-                (point(0, 1), point(1, 1), secondary),
-                (point(2, 2), point(2, 3), accent),
-                (point(2, 3), point(3, 3), accent)
-            ])
-        }
-
-        return edges
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(Color(red: 0.035, green: 0.055, blue: 0.10), in: Capsule())
+            .overlay(Capsule().stroke(color.opacity(0.85), lineWidth: 1.5))
+            .frame(maxWidth: width)
     }
 }
 
@@ -1445,330 +1028,6 @@ private struct RicochetTutorialArtwork: View {
             }
         }
         .frame(width: 90, height: 190)
-    }
-}
-
-private struct TiltRaceTutorialArtwork: View {
-    let phase: Int
-    let accent: Color
-    let secondary: Color
-    let isPulsing: Bool
-
-    private let points: [CGPoint] = [
-        CGPoint(x: 0.50, y: 0.88),
-        CGPoint(x: 0.22, y: 0.68),
-        CGPoint(x: 0.76, y: 0.51),
-        CGPoint(x: 0.31, y: 0.31),
-        CGPoint(x: 0.68, y: 0.13)
-    ]
-
-    var body: some View {
-        VStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color.black.opacity(0.28))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(accent.opacity(0.35), lineWidth: 1)
-                    }
-
-                Canvas { context, size in
-                    var route = Path()
-                    for (index, point) in points.enumerated() {
-                        let position = CGPoint(
-                            x: point.x * size.width,
-                            y: point.y * size.height
-                        )
-                        if index == 0 {
-                            route.move(to: position)
-                        } else {
-                            route.addLine(to: position)
-                        }
-                    }
-                    context.stroke(
-                        route,
-                        with: .linearGradient(
-                            Gradient(colors: [accent, secondary]),
-                            startPoint: .zero,
-                            endPoint: CGPoint(x: size.width, y: 0)
-                        ),
-                        style: StrokeStyle(
-                            lineWidth: 4,
-                            lineCap: .round,
-                            dash: [6, 8]
-                        )
-                    )
-                }
-                .padding(8)
-
-                ForEach(Array(points.enumerated()), id: \.offset) { index, point in
-                    ZStack {
-                        Circle()
-                            .fill(Color.black.opacity(0.72))
-                        Circle()
-                            .stroke(
-                                index == min(phase + 1, 4)
-                                ? accent
-                                : Color.white.opacity(0.28),
-                                lineWidth: index == min(phase + 1, 4) ? 3 : 1.5
-                            )
-                        Text("\(index + 1)")
-                            .font(.system(size: 10, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 30, height: 30)
-                    .scaleEffect(
-                        index == min(phase + 1, 4) && isPulsing
-                        ? 1.12
-                        : 1
-                    )
-                    .position(
-                        x: point.x * 220,
-                        y: point.y * 220
-                    )
-                }
-
-                Circle()
-                    .fill(accent)
-                    .frame(width: 22, height: 22)
-                    .shadow(color: accent.opacity(0.85), radius: 10)
-                    .position(
-                        x: points[min(phase, 2)].x * 220,
-                        y: points[min(phase, 2)].y * 220
-                    )
-            }
-            .frame(width: 220, height: 220)
-            .rotation3DEffect(
-                .degrees(phase == 0 && isPulsing ? 3 : 0),
-                axis: (x: 1, y: -1, z: 0)
-            )
-
-            Label(
-                phase == 0
-                ? "MOVE BY TILTING"
-                : (phase == 1 ? "GATES IN ORDER" : "FIRST TO GATE 10"),
-                systemImage:
-                    phase == 0
-                    ? "gyroscope"
-                    : (phase == 1 ? "point.topleft.down.to.point.bottomright.curvepath" : "flag.checkered")
-            )
-            .font(.system(size: 12, weight: .black, design: .rounded))
-            .foregroundStyle(accent)
-        }
-    }
-}
-
-private struct TapFrenzyTutorialArtwork: View {
-    let phase: Int
-    let accent: Color
-    let secondary: Color
-    let isPulsing: Bool
-
-    private let points: [CGPoint] = [
-        CGPoint(x: 0.24, y: 0.25),
-        CGPoint(x: 0.72, y: 0.19),
-        CGPoint(x: 0.49, y: 0.49),
-        CGPoint(x: 0.22, y: 0.76),
-        CGPoint(x: 0.75, y: 0.72)
-    ]
-
-    var body: some View {
-        VStack(spacing: 15) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color.black.opacity(0.28))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(accent.opacity(0.30), lineWidth: 1)
-                    }
-
-                ForEach(0..<5, id: \.self) { index in
-                    let number = index + 1
-                    let isNext = phase == 0 && number == (isPulsing ? 2 : 1)
-
-                    ZStack {
-                        if isNext {
-                            Circle()
-                                .stroke(targetColor(number).opacity(0.45), lineWidth: 2)
-                                .frame(width: 52, height: 52)
-                        }
-                        Circle()
-                            .fill(targetColor(number))
-                            .frame(width: phase == 1 ? 39 : 44, height: phase == 1 ? 39 : 44)
-                            .shadow(color: targetColor(number).opacity(0.55), radius: 8)
-                        Text("\(number)")
-                            .font(.system(size: 15, weight: .black, design: .rounded))
-                            .foregroundStyle(Color.black.opacity(0.72))
-                    }
-                    .position(
-                        x: points[index].x * 220,
-                        y: points[index].y * 220
-                    )
-                }
-
-                if phase == 1 {
-                    Text(isPulsing ? "+16" : "+10")
-                        .font(.system(size: 25, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 15)
-                        .frame(height: 44)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(secondary.opacity(0.55), lineWidth: 1))
-                }
-
-                if phase == 2 {
-                    HStack(spacing: 13) {
-                        scoreCard(name: "P1", score: 124, color: accent)
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 15, weight: .black))
-                            .foregroundStyle(.white.opacity(0.42))
-                        scoreCard(name: "P2", score: 138, color: secondary)
-                    }
-                    .padding(14)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
-                }
-            }
-            .frame(width: 220, height: 220)
-
-            Label(
-                phase == 0
-                    ? "TAP 1 → 5"
-                    : (phase == 1 ? "SPEED BUILDS SCORE" : "60 SECONDS EACH"),
-                systemImage:
-                    phase == 0
-                    ? "hand.tap.fill"
-                    : (phase == 1 ? "bolt.fill" : "person.2.fill")
-            )
-            .font(.system(size: 12, weight: .black, design: .rounded))
-            .foregroundStyle(accent)
-        }
-    }
-
-    private func targetColor(_ number: Int) -> Color {
-        switch number {
-        case 1: return accent
-        case 2: return Color.orange
-        case 3: return secondary
-        case 4: return Color.purple
-        default: return Color.green
-        }
-    }
-
-    private func scoreCard(name: String, score: Int, color: Color) -> some View {
-        VStack(spacing: 3) {
-            Text(name)
-                .font(.system(size: 8, weight: .black, design: .rounded))
-                .foregroundStyle(color)
-            Text("\(score)")
-                .font(.system(size: 20, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
-        }
-    }
-}
-
-private struct SwipeRushTutorialArtwork: View {
-    let phase: Int
-    let accent: Color
-    let secondary: Color
-    let isPulsing: Bool
-
-    private var directionSymbol: String {
-        switch phase {
-        case 0: "arrow.right"
-        case 1: "arrow.up"
-        default: "arrow.left"
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 15) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color.black.opacity(0.30))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(accent.opacity(0.30), lineWidth: 1)
-                    }
-
-                ForEach(0..<4, id: \.self) { index in
-                    Image(systemName: directionSymbol)
-                        .font(.system(size: 18 + CGFloat(index * 5), weight: .black))
-                        .foregroundStyle(accent.opacity(0.04 + Double(index) * 0.025))
-                        .offset(
-                            x: CGFloat(index - 2) * 36,
-                            y: CGFloat(2 - index) * 31
-                        )
-                }
-
-                ZStack {
-                    Circle()
-                        .stroke(.white.opacity(0.08), lineWidth: 7)
-                        .frame(width: 110, height: 110)
-                    Circle()
-                        .trim(from: 0, to: phase == 1 ? (isPulsing ? 0.30 : 0.78) : 0.86)
-                        .stroke(
-                            phase == 1 ? secondary : accent,
-                            style: StrokeStyle(lineWidth: 7, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 110, height: 110)
-                        .shadow(color: accent.opacity(0.65), radius: 8)
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [.white.opacity(0.95), phase == 1 ? secondary : accent],
-                                center: .topLeading,
-                                startRadius: 2,
-                                endRadius: 65
-                            )
-                        )
-                        .frame(width: 94, height: 94)
-                        .shadow(color: accent.opacity(0.52), radius: 14)
-                    Image(systemName: directionSymbol)
-                        .font(.system(size: 39, weight: .black))
-                        .foregroundStyle(Color.black.opacity(0.70))
-                }
-                .scaleEffect(isPulsing ? 1.04 : 0.96)
-
-                if phase == 0 {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [accent.opacity(0.18), accent],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: isPulsing ? 106 : 74, height: 8)
-                        .shadow(color: accent, radius: 8)
-                        .offset(x: 54)
-                }
-
-                if phase == 2 {
-                    Text(isPulsing ? "COMBO ×8" : "+12")
-                        .font(.system(size: 16, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .frame(height: 40)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(secondary.opacity(0.50), lineWidth: 1))
-                        .offset(y: 78)
-                }
-            }
-            .frame(width: 220, height: 220)
-
-            Label(
-                phase == 0
-                    ? "SWIPE FROM THE TARGET"
-                    : (phase == 1 ? "BEAT THE TIMER" : "BUILD YOUR COMBO"),
-                systemImage:
-                    phase == 0
-                    ? "hand.draw.fill"
-                    : (phase == 1 ? "timer" : "flame.fill")
-            )
-            .font(.system(size: 12, weight: .black, design: .rounded))
-            .foregroundStyle(accent)
-        }
     }
 }
 

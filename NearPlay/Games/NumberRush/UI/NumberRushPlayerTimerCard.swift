@@ -41,11 +41,14 @@ struct NumberRushPlayerTimerCard: View {
                             )
                     }
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: isActive ? 12 : 8) {
                         ZStack {
                             Circle()
                                 .fill(accentColor.opacity(0.14))
-                                .frame(width: 42, height: 42)
+                                .frame(
+                                    width: isActive ? 42 : 28,
+                                    height: isActive ? 42 : 28
+                                )
 
                             Image(
                                 systemName:
@@ -53,7 +56,7 @@ struct NumberRushPlayerTimerCard: View {
                                     ? "person.fill"
                                     : "person.2.fill"
                             )
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(size: isActive ? 17 : 14, weight: .semibold))
                             .foregroundStyle(accentColor)
                         }
 
@@ -69,6 +72,7 @@ struct NumberRushPlayerTimerCard: View {
                                     )
                                     .foregroundStyle(.white)
                                     .lineLimit(1)
+                                    .minimumScaleFactor(0.70)
 
                                 Text(isLocalPlayer ? "Your turn" : "Playing")
                                     .font(.system(size: 12, weight: .semibold))
@@ -119,6 +123,7 @@ struct NumberRushPlayerTimerCard: View {
                                     )
                                     .foregroundStyle(.white)
                                     .lineLimit(1)
+                                    .minimumScaleFactor(0.70)
 
                                 Text("\(score) pts")
                                     .font(.system(size: 12, weight: .semibold))

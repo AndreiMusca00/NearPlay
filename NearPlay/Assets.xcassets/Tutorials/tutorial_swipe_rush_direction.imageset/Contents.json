@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "tutorial_swipe_rush_direction.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

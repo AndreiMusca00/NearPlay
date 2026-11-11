@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "tutorial_number_rush_score.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

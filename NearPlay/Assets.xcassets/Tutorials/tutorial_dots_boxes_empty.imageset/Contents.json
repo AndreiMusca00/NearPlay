@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "tutorial_dots_boxes_empty.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

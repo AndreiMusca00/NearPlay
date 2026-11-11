@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "connect-four-win.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

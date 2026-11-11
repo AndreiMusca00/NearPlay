@@ -48,6 +48,8 @@ struct NumberRushGameScreen: View {
                 playersTimerSection
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
+
+                Spacer(minLength: 0)
             }
 
             if let feedback {
@@ -283,10 +285,10 @@ struct NumberRushGameScreen: View {
             }
             .frame(
                 maxWidth: .infinity,
-                maxHeight: .infinity,
                 alignment: .top
             )
         }
+        .aspectRatio(1, contentMode: .fit)
     }
 
     private func numberCell(
