@@ -117,6 +117,8 @@ struct TicTacToeGameScreen: View {
 
             VStack(spacing: 3) {
                 Text(gameTitle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .font(
                         .system(
                             size: 23,
@@ -134,6 +136,8 @@ struct TicTacToeGameScreen: View {
                         )
                     )
                     .foregroundStyle(activeColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
 
             Spacer()
@@ -266,7 +270,7 @@ struct TicTacToeGameScreen: View {
                         )
                     )
                     .foregroundStyle(.white)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.72)
 
                 Text(

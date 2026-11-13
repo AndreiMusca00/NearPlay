@@ -181,12 +181,7 @@ struct RicochetView: View {
 
     private func playerCard(name: String, playerID: String, color: Color, label: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Circle().fill(color).frame(width: 9, height: 9).shadow(color: color, radius: 6)
-                Text(name).font(.system(size: 13, weight: .bold, design: .rounded)).lineLimit(1)
-                Spacer()
-                Text(label).font(.system(size: 8, weight: .black)).foregroundStyle(.white.opacity(0.34))
-            }
+            PlayerCardHeading(name: name, badge: label, color: color)
             HStack(spacing: 6) {
                 ForEach(0..<3, id: \.self) { index in
                     Image(systemName: index < state.lives(for: playerID) ? "diamond.fill" : "diamond")

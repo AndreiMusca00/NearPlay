@@ -2163,21 +2163,10 @@ extension BluetoothTransport: CBCentralManagerDelegate {
             advertisementData[CBAdvertisementDataLocalNameKey]
             as? String
 
-        let displayName = {
-            let trimmed = advertisedName?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if let trimmed,
-               !trimmed.isEmpty {
-                return trimmed
-            }
-
-            return "Nearby Player"
-        }()
-
-        let peer = NearbyPeer(
+        let peer = NearbyPeer.discovered(
             id: peerID,
-            displayName: displayName,
+            advertisedName: advertisedName,
+            previous: discoveryPeerByPeripheralID[peripheral.identifier],
             gameID: configuration.gameID,
             maxPlayers: configuration.maxPlayers
         )

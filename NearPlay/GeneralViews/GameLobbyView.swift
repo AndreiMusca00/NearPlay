@@ -94,11 +94,7 @@ struct GameLobbyView: View {
     // MARK: - Computed properties
 
     private var safePlayerName: String {
-        let trimmedName = playerName.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-
-        return trimmedName.isEmpty ? "Player" : trimmedName
+        PlayerProfile.displayName(for: playerName)
     }
 
     private var isSupportedGame: Bool {
@@ -3281,36 +3277,41 @@ private struct HoldToSearchButton: View {
 // MARK: - Animated searching icon
 
 private struct SearchingWavesIcon: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var animationStart = Date()
+
     var body: some View {
-        TimelineView(.animation) { timeline in
-            let time =
-                timeline.date
-                    .timeIntervalSinceReferenceDate
+        ZStack {
+            if !reduceMotion {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                    let elapsed = max(0, timeline.date.timeIntervalSince(animationStart))
 
-            let variableValue =
-                (
-                    time * 0.75
-                )
-                .truncatingRemainder(
-                    dividingBy: 1
-                )
+                    ZStack {
+                        ForEach(0..<2) { index in
+                            let phase = (elapsed / 1.8 + Double(index) * 0.5)
+                                .truncatingRemainder(dividingBy: 1)
 
-            Image(
-                systemName:
-                    "dot.radiowaves.left.and.right",
-                variableValue: variableValue
-            )
-            .font(
-                .system(
-                    size: 30,
-                    weight: .semibold
-                )
-            )
-            .foregroundStyle(.white)
-            .symbolRenderingMode(.hierarchical)
-            .shadow(color: Color.white.opacity(0.25),radius: 5)
-            .frame(width: 58, height: 58)
+                            Circle()
+                                .stroke(.white, lineWidth: 1.5)
+                                .frame(width: 48, height: 48)
+                                .scaleEffect(0.75 + 0.55 * phase)
+                                // Both ends are invisible, so the next wave starts seamlessly.
+                                .opacity(sin(.pi * phase) * 0.28)
+                        }
+                    }
+                }
+                .transaction { $0.animation = nil }
+            }
+
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(.white)
+                .symbolRenderingMode(.monochrome)
+                .shadow(color: Color.white.opacity(0.25), radius: 5)
         }
+        .frame(width: 58, height: 58)
+        .accessibilityHidden(true)
+        .onAppear { animationStart = Date() }
     }
 }
 
@@ -3392,6 +3393,7 @@ private struct NearbyPlayerRow: View {
                     )
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
 
                 Text(
                     state == .connected

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>NearPlay 03-diagonal</title>
+  <defs>
+    <linearGradient id="diagonal" x1="512" y1="217" x2="512" y2="794" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#23DFF5" />
+      <stop offset=".43" stop-color="#3C74FF" />
+      <stop offset=".513" stop-color="#5160FE" />
+      <stop offset="1" stop-color="#8E2FF7" />
+    </linearGradient>
+  </defs>
+  <path fill="url(#diagonal)" d="M385 233C399 240 411 250 422 261L842 667C842 736 796 794 733 794C698 794 670 779 646 755L385 513V398H389C403 398 414 387 414 373C414 359 403 347 389 347H385Z" />
+</svg>

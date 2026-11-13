@@ -134,8 +134,9 @@ struct FirstRunView: View {
                                 )
                             )
                             .onChange(of: name) { _, newValue in
-                                if newValue.count > 10 {
-                                    name = String(newValue.prefix(10))
+                                let limited = PlayerProfile.limitedNameInput(newValue)
+                                if newValue != limited {
+                                    name = limited
                                 }
                             }
                             .textInputAutocapitalization(.words)
@@ -193,7 +194,7 @@ struct FirstRunView: View {
                         }
 
                         Text(
-                            "You can change this later from the main screen."
+                            "Maximum \(PlayerProfile.maximumNameLength) characters. You can change this later."
                         )
                         .font(
                             .system(
@@ -325,9 +326,7 @@ struct FirstRunView: View {
     // MARK: - Actions
 
     private func saveName() {
-        let trimmed = name.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
+        let trimmed = PlayerProfile.normalizedName(name)
 
         guard !trimmed.isEmpty else {
             return

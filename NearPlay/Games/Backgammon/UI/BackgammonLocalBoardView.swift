@@ -502,8 +502,9 @@ struct BackgammonLocalBoardView: View {
                     )
                 )
                 .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
+                .lineLimit(2)
+                .minimumScaleFactor(0.65)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, 2)
 
             Text(isActive ? "TURN" : "WAIT")

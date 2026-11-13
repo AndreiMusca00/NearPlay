@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="url(#background)" />
+  <title>NearPlay — Dark background</title>
+  <desc>Transparent vector artwork. The controller cross is a real cutout. Each part is a path; there are no embedded bitmap images, fonts, filters or external resources.</desc>
+  <defs>
+    <linearGradient id="right" x1="735" y1="213" x2="735" y2="794" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25F4DE" />
+      <stop offset="1" stop-color="#258BFF" />
+    </linearGradient>
+    <linearGradient id="left" x1="282" y1="217" x2="282" y2="794" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#23DFF5" />
+      <stop offset=".43" stop-color="#3C74FF" />
+      <stop offset=".513" stop-color="#5160FE" />
+      <stop offset=".74" stop-color="#A242FC" />
+      <stop offset="1" stop-color="#F23CF2" />
+    </linearGradient>
+    <linearGradient id="diagonal" x1="512" y1="217" x2="512" y2="794" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#23DFF5" />
+      <stop offset=".43" stop-color="#3C74FF" />
+      <stop offset=".513" stop-color="#5160FE" />
+      <stop offset="1" stop-color="#8E2FF7" />
+    </linearGradient>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#282340" />
+      <stop offset="1" stop-color="#1A1735" />
+    </linearGradient>
+  </defs>
+  <g id="01-right-stem">
+    <path fill="url(#right)" d="M626 322C626 262 674 213 735 213C795 213 842 261 842 322V668L626 459Z" />
+  </g>
+  <g id="02-left-stem">
+    <path fill="url(#left)" d="M180 355C180 277 241 217 317 217C341 217 364 222 385 233V347H354V313C354 299 343 289 329 289C315 289 303 299 303 313V347H267C253 347 242 359 242 373C242 387 254 398 267 398H303V432C303 446 315 457 329 457C343 457 354 446 354 432V398H385V680C385 742 339 792 282 792C225 792 180 746 180 680Z" />
+  </g>
+  <g id="03-diagonal">
+    <path fill="url(#diagonal)" d="M385 233C399 240 411 250 422 261L842 667C842 736 796 794 733 794C698 794 670 779 646 755L385 513V398H389C403 398 414 387 414 373C414 359 403 347 389 347H385Z" />
+  </g>
+</svg>

@@ -160,7 +160,7 @@ struct GamesListView: View {
             }
 
             .sheet(item: $selectedGameForPurchase, onDismiss: openPendingGuestLobby) { game in
-                let offersGuestAccess = game.id == Game.numberRush.id || game.id == Game.swipeRush.id
+                let offersGuestAccess = game.offersGuestAccess
 
                 GamePurchaseSheet(
                     game: game,
@@ -872,6 +872,8 @@ struct GamesListView: View {
                     } label: {
                         compactGameCardContent(game)
                     }
+                    .accessibilityLabel(lockedCardAccessibilityLabel(game))
+                    .accessibilityHint("View unlock options")
                 }
             }
             .buttonStyle(.plain)
@@ -884,95 +886,19 @@ struct GamesListView: View {
     private func compactGameCardContent(
         _ game: Game
     ) -> some View {
-        VStack(spacing: 13) {
-            Spacer(minLength: 6)
-
-            GameIconView(
-                game: game,
-                size: 72,
-                cornerRadius: 21,
-                symbolSize: 29
-            )
-
-            Text(game.title)
-                .font(
-                    .system(
-                        size: 16,
-                        weight: .bold,
-                        design: .rounded
-                    )
-                )
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-                .frame(maxWidth: .infinity)
-
-            HStack(spacing: 6) {
-                ForEach(orderedModes(for: game)) { mode in
-                    compactModeBadge(
-                        mode,
-                        accent: game.accentColor
-                    )
-                }
-            }
-            .frame(maxWidth: .infinity)
-
-            Spacer(minLength: 5)
-        }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 11)
-        .frame(maxWidth: .infinity, minHeight: 188)
-        .background {
-            compactCardBackground(game)
-        }
-        .contentShape(
-            RoundedRectangle(
-                cornerRadius: 22,
-                style: .continuous
-            )
+        GameLibraryCard(
+            game: game,
+            isLocked: !purchaseManager.isUnlocked(game),
+            price: purchaseManager.displayPrice(for: game),
+            isLoadingPrice: purchaseManager.isLoadingProducts || !purchaseManager.isInitialStoreReady
         )
     }
 
-    private func compactCardBackground(
-        _ game: Game
-    ) -> some View {
-        RoundedRectangle(
-            cornerRadius: 22,
-            style: .continuous
-        )
-        .fill(
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.065),
-                    game.accentColor.opacity(0.065),
-                    Color.white.opacity(0.022)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: 22,
-                style: .continuous
-            )
-            .stroke(
-                LinearGradient(
-                    colors: [
-                        game.accentColor.opacity(0.34),
-                        Color.white.opacity(0.08)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: 1
-            )
+    private func lockedCardAccessibilityLabel(_ game: Game) -> String {
+        if let price = purchaseManager.displayPrice(for: game) {
+            return "\(game.title), locked, \(price)"
         }
-        .shadow(
-            color: game.accentColor.opacity(0.08),
-            radius: 16,
-            y: 8
-        )
+        return "\(game.title), locked"
     }
 
     private func compactFavoriteButton(
@@ -1016,59 +942,6 @@ struct GamesListView: View {
         )
     }
 
-    private func orderedModes(
-        for game: Game
-    ) -> [GamePlayMode] {
-        GamePlayMode.allCases.filter {
-            game.supportedModes.contains($0)
-        }
-    }
-
-    private func compactModeBadge(
-        _ mode: GamePlayMode,
-        accent: Color
-    ) -> some View {
-        Image(systemName: modeIcon(mode))
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(accent)
-            .frame(width: 27, height: 27)
-            .background {
-                Circle()
-                    .fill(accent.opacity(0.11))
-            }
-            .overlay {
-                Circle()
-                    .stroke(accent.opacity(0.24), lineWidth: 1)
-            }
-            .accessibilityLabel(modeTitle(mode))
-    }
-
-    private func modeIcon(
-        _ mode: GamePlayMode
-    ) -> String {
-        switch mode {
-        case .nearby:
-            return "antenna.radiowaves.left.and.right"
-        case .local:
-            return "person.2.fill"
-        case .computer:
-            return "cpu"
-        }
-    }
-
-    private func modeTitle(
-        _ mode: GamePlayMode
-    ) -> String {
-        switch mode {
-        case .nearby:
-            return "Nearby"
-        case .local:
-            return "Local"
-        case .computer:
-            return "CPU"
-        }
-    }
-
     // MARK: - Favorites
 
     private var filteredGames: [Game] {
@@ -1096,6 +969,20 @@ struct GamesListView: View {
         }
 
         return games.sorted { firstGame, secondGame in
+
+            if selectedFilter == .all {
+                let firstIsUnlocked = purchaseManager.isUnlocked(firstGame)
+                let secondIsUnlocked = purchaseManager.isUnlocked(secondGame)
+
+                if firstIsUnlocked != secondIsUnlocked {
+                    return firstIsUnlocked
+                }
+            }
+
+            if selectedFilter == .popular,
+               firstGame.displayPriority != secondGame.displayPriority {
+                return firstGame.displayPriority > secondGame.displayPriority
+            }
 
             let firstIsNew = firstGame.badge == .new
 

@@ -100,7 +100,7 @@ struct DotsAndBoxesGameScreen: View {
         return HStack(spacing: 10) {
             Circle().fill(color).frame(width: 10, height: 10).shadow(color: color.opacity(active ? 0.9 : 0), radius: 7)
             VStack(alignment: .leading, spacing: 2) {
-                Text(player.name).font(.system(size: 14, weight: .bold, design: .rounded)).lineLimit(1)
+                Text(player.name).font(.system(size: 14, weight: .bold, design: .rounded)).lineLimit(2).minimumScaleFactor(0.7)
                 Text(active ? "PLAYING" : player.badge).font(.system(size: 10, weight: .bold)).foregroundStyle(active ? color : .white.opacity(0.38))
             }
             Spacer(minLength: 2)
@@ -220,7 +220,7 @@ struct DotsAndBoxesResultOverlay: View {
     private func resultScore(_ name: String, score: Int, color: Color) -> some View {
         VStack(spacing: 5) {
             Text("\(score)").font(.system(size: 34, weight: .black, design: .rounded)).foregroundStyle(color)
-            Text(name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+            Text(name).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
         }.frame(maxWidth: .infinity)
     }
 }

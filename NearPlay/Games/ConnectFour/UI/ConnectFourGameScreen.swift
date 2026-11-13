@@ -130,6 +130,8 @@ struct ConnectFourGameScreen: View {
 
             VStack(spacing: 3) {
                 Text(gameTitle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .font(
                         .system(
                             size: 23,
@@ -147,6 +149,8 @@ struct ConnectFourGameScreen: View {
                         )
                     )
                     .foregroundStyle(activeColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
 
             Spacer()
@@ -307,7 +311,8 @@ struct ConnectFourGameScreen: View {
                         )
                     )
                     .foregroundStyle(.white)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
 
                 Text(
                     isActive

@@ -142,6 +142,7 @@ struct BackgammonGameScreen: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
 
                 Text("\(borneOff) off")
                     .font(.system(size: 10, weight: .medium))

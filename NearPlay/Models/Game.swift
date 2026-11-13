@@ -75,6 +75,10 @@ struct Game: Identifiable, Hashable {
         productID == nil
     }
 
+    var offersGuestAccess: Bool {
+        productID != nil && supportedModes.contains(.nearby)
+    }
+
     var playerCountText: String {
         if minPlayers == maxPlayers {
             return minPlayers == 1
@@ -102,7 +106,9 @@ extension Game {
             .nearby,
             .local,
             .computer
-        ]
+        ],
+        isPopular: true,
+        displayPriority: 30
     )
 
     static let numberRush = Game(
@@ -136,7 +142,9 @@ extension Game {
             .nearby,
             .local,
             .computer
-        ]
+        ],
+        isPopular: true,
+        displayPriority: 40
     )
 
 
@@ -172,7 +180,7 @@ extension Game {
             .computer
         ],
         isPopular: true,
-        displayPriority: 80
+        displayPriority: 60
     )
 
     static let dotsAndBoxes = Game(
@@ -186,8 +194,6 @@ extension Game {
         accentHex: "#20C7FF",
         supportedModes: [.nearby, .local, .computer],
         badge: .new,
-        isPopular: true,
-        displayPriority: 60,
         productID: PurchaseCatalog.dotsAndBoxes
     )
 
@@ -202,8 +208,6 @@ extension Game {
         accentHex: "#26E6F2",
         supportedModes: [.nearby],
         badge: .new,
-        isPopular: true,
-        displayPriority: 100,
         productID: PurchaseCatalog.ricochet
     )
 
@@ -219,7 +223,7 @@ extension Game {
         supportedModes: [.nearby, .local],
         badge: .new,
         isPopular: true,
-        displayPriority: 90,
+        displayPriority: 10,
         productID: PurchaseCatalog.tiltRace
     )
 
@@ -235,7 +239,7 @@ extension Game {
         supportedModes: [.nearby, .local],
         badge: .new,
         isPopular: true,
-        displayPriority: 85
+        displayPriority: 50
     )
 
     static let swipeRush = Game(
@@ -250,7 +254,7 @@ extension Game {
         supportedModes: [.nearby, .local],
         badge: .new,
         isPopular: true,
-        displayPriority: 84,
+        displayPriority: 20,
         productID: PurchaseCatalog.swipeRush
     )
 
@@ -265,8 +269,6 @@ extension Game {
         accentHex: "#FF365F",
         supportedModes: [.nearby],
         badge: .new,
-        isPopular: true,
-        displayPriority: 95,
         productID: PurchaseCatalog.laserDuel
     )
 

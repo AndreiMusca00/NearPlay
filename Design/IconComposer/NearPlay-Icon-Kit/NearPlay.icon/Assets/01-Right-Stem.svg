@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>NearPlay 01-right-stem</title>
+  <defs>
+    <linearGradient id="right" x1="735" y1="213" x2="735" y2="794" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25F4DE" />
+      <stop offset="1" stop-color="#258BFF" />
+    </linearGradient>
+  </defs>
+  <path fill="url(#right)" d="M626 322C626 262 674 213 735 213C795 213 842 261 842 322V668L626 459Z" />
+</svg>

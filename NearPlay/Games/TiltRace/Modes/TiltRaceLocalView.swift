@@ -153,19 +153,7 @@ struct TiltRaceLocalView: View {
         let displayedTime = timeToDisplay(for: index)
 
         return VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(color)
-                    .frame(width: 8, height: 8)
-                    .shadow(color: color, radius: isActive ? 6 : 0)
-                Text(name)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                Spacer()
-                Text(badge)
-                    .font(.system(size: 8, weight: .black))
-                    .foregroundStyle(.white.opacity(0.34))
-            }
+            PlayerCardHeading(name: name, badge: badge, color: color)
 
             Text(displayedTime.map(formatTime) ?? "--:--.--")
                 .font(.system(size: 20, weight: .black, design: .rounded))
@@ -606,6 +594,7 @@ struct TiltRaceLocalView: View {
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Text(badge)
                     .font(.system(size: 8, weight: .black, design: .rounded))
                     .foregroundStyle(.white.opacity(0.34))

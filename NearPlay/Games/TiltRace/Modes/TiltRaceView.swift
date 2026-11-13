@@ -221,17 +221,7 @@ struct TiltRaceView: View {
     ) -> some View {
         let progress = state.progress(for: playerID)
         return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Circle().fill(color).frame(width: 8, height: 8)
-                    .shadow(color: color, radius: 5)
-                Text(name)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                Spacer()
-                Text(label)
-                    .font(.system(size: 8, weight: .black))
-                    .foregroundStyle(.white.opacity(0.34))
-            }
+            PlayerCardHeading(name: name, badge: label, color: color)
 
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {

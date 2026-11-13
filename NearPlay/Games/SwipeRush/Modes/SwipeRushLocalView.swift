@@ -476,6 +476,7 @@ struct SwipeRushLocalView: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Text("\(result?.completedSwipes ?? 0) swipes · ×\(result?.bestCombo ?? 0) best combo")
                     .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.40))

@@ -218,7 +218,8 @@ struct BattleshipBattleView: View {
                         )
                     )
                     .foregroundStyle(.white)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
 
                 Text(
                     isActive

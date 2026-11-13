@@ -12,14 +12,12 @@ struct EditNameSheet: View {
     @FocusState
     private var focused: Bool
 
-    private let maxNameLength = 10
+    private let maxNameLength = PlayerProfile.maximumNameLength
 
     init(name: Binding<String>) {
         self._name = name
         self._working = State(
-            initialValue: String(
-                name.wrappedValue.prefix(10)
-            )
+            initialValue: PlayerProfile.normalizedName(name.wrappedValue)
         )
     }
 
@@ -351,18 +349,13 @@ struct EditNameSheet: View {
 
     private func save() {
 
-        let trimmed = working
-            .trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
+        let trimmed = PlayerProfile.normalizedName(working)
 
         guard !trimmed.isEmpty else {
             return
         }
 
-        name = String(
-            trimmed.prefix(maxNameLength)
-        )
+        name = trimmed
 
         dismiss()
     }

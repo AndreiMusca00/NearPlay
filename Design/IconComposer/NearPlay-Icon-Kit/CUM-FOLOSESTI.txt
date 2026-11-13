@@ -1,0 +1,36 @@
+NearPlay — kit vectorial pentru Icon Composer
+
+DESCHIDERE RAPIDĂ
+Deschide NearPlay.icon în Icon Composer. Acesta este proiectul de lucru,
+cu fundalul, culorile și straturile pregătite.
+
+FUNDALURI LIGHT / DARK
+Default (Light): gradient foarte discret, albastru pal cu lavandă.
+Dark: gradient bleumarin cu violet închis.
+Ambele aparțin aceluiași fișier NearPlay.icon. Comută între Default și
+Dark în Icon Composer ca să le verifici sau să le ajustezi.
+SVG-urile NearPlay-Light.svg și NearPlay-Dark.svg sunt variante complete,
+cu fundal. PNG-urile sunt previzualizări ale acestor SVG-uri, fără efectele
+dinamice de sticlă pe care Icon Composer și iOS le aplică separat.
+
+SVG EDITABIL
+NearPlay.svg este monograma completă, vectorială, pe fundal transparent.
+Nu conține un PNG ascuns în SVG. Toate formele sunt trasee editabile.
+
+IMPORT MANUAL
+1. Creează un document nou în Icon Composer, de 1024 × 1024.
+2. Adaugă împreună cele trei SVG-uri din Layers.
+3. Păstrează ordinea: Right Stem în spate, Left Stem la mijloc,
+   Diagonal deasupra. Au aceeași planșă de 1024 × 1024 și sunt aliniate.
+4. Definește fundalul direct în Icon Composer și setează variante separate:
+   Default cu albastru pal / lavandă și Dark cu bleumarin / violet închis.
+5. Folosește Combined pentru sticla grupului din față, pentru a evita
+   reliefuri separate la îmbinarea componentelor literei.
+6. Verifică Default, Dark și Mono înainte de export.
+
+Straturile de import au gradiente SVG vectoriale pentru a păstra culorile
+brandului. Poți suprascrie culorile cu Fill > Solid sau Gradient în Icon
+Composer. Nu importa previzualizarea PNG ca strat vectorial.
+
+Acest kit este separat de iconița instalată în aplicație. Pentru integrare
+se alege ulterior fișierul .icon în proiectul Xcode.

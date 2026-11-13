@@ -41,90 +41,36 @@ struct NumberRushPlayerTimerCard: View {
                             )
                     }
 
-                    HStack(spacing: isActive ? 12 : 8) {
-                        ZStack {
-                            Circle()
-                                .fill(accentColor.opacity(0.14))
-                                .frame(
-                                    width: isActive ? 42 : 28,
-                                    height: isActive ? 42 : 28
-                                )
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(playerName)
+                            .font(.system(size: isActive ? 15 : 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                            Image(
-                                systemName:
-                                    isLocalPlayer
-                                    ? "person.fill"
-                                    : "person.2.fill"
-                            )
-                            .font(.system(size: isActive ? 17 : 14, weight: .semibold))
-                            .foregroundStyle(accentColor)
-                        }
+                        HStack(spacing: 6) {
+                            Image(systemName: isLocalPlayer ? "person.fill" : "person.2.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(accentColor)
 
-                        if isActive {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(playerName)
-                                    .font(
-                                        .system(
-                                            size: 16,
-                                            weight: .bold,
-                                            design: .rounded
-                                        )
-                                    )
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.70)
-
+                            if isActive {
                                 Text(isLocalPlayer ? "Your turn" : "Playing")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(accentColor)
-                            }
-
-                            Spacer(minLength: 4)
-
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text("\(score) pts")
-                                    .font(
-                                        .system(
-                                            size: 15,
-                                            weight: .bold,
-                                            design: .rounded
-                                        )
-                                    )
-                                    .foregroundStyle(.white)
-
-                                Text(
-                                    remainingTimeText(
-                                        at: timeline.date
-                                    )
-                                )
-                                .font(
-                                    .system(
-                                        size: 13,
-                                        weight: .black,
-                                        design: .monospaced
-                                    )
-                                )
-                                .foregroundStyle(
-                                    progress < 0.25
-                                    ? Color.red
-                                    : Color.white.opacity(0.72)
-                                )
-                                .contentTransition(.numericText())
-                            }
-                        } else {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(playerName)
-                                    .font(
-                                        .system(
-                                            size: 13,
-                                            weight: .bold,
-                                            design: .rounded
-                                        )
-                                    )
-                                    .foregroundStyle(.white)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.70)
-
+                                    .minimumScaleFactor(0.8)
+                                Spacer(minLength: 2)
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text("\(score) pts")
+                                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.white)
+                                    Text(remainingTimeText(at: timeline.date))
+                                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                                        .foregroundStyle(progress < 0.25 ? Color.red : Color.white.opacity(0.72))
+                                        .contentTransition(.numericText())
+                                }
+                            } else {
                                 Text("\(score) pts")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(Color.white.opacity(0.43))

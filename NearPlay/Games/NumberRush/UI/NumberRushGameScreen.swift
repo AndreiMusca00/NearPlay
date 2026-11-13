@@ -399,7 +399,7 @@ struct NumberRushGameScreen: View {
 
     private var playersTimerSection: some View {
         GeometryReader { geometry in
-            let compactWidth: CGFloat = 104
+            let compactWidth: CGFloat = 120
             let spacing: CGFloat = 10
             let expandedWidth =
                 max(

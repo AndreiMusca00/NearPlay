@@ -1,6 +1,23 @@
 import SwiftUI
 
 struct PlayerProfile {
+    static let maximumNameLength = 10
+
+    /// Count user-visible characters, so emoji and accented letters stay intact.
+    static func limitedNameInput(_ name: String) -> String {
+        String(name.prefix(maximumNameLength))
+    }
+
+    static func normalizedName(_ name: String) -> String {
+        limitedNameInput(name.split(whereSeparator: \.isWhitespace).joined(separator: " "))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func displayName(for name: String) -> String {
+        let normalized = normalizedName(name)
+        return normalized.isEmpty ? "Player" : normalized
+    }
+
     // UserDefaults keys
     static let nameKey = "player_name"
     static let favoriteGameIDsKey = "favorite_game_ids"
@@ -16,11 +33,25 @@ struct PlayerNameStorage: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .environment(\._playerNameBinding, $playerName)
+            .environment(\._playerNameBinding, Binding(
+                get: { PlayerProfile.normalizedName(playerName) },
+                set: { playerName = PlayerProfile.normalizedName($0) }
+            ))
             .environment(
                 \._favoriteGameIDsBinding,
                 favoriteGameIDsBinding
             )
+            .onAppear(perform: normalizeStoredName)
+            .onChange(of: playerName) { _, _ in
+                normalizeStoredName()
+            }
+    }
+
+    private func normalizeStoredName() {
+        let normalized = PlayerProfile.normalizedName(playerName)
+        if playerName != normalized {
+            playerName = normalized
+        }
     }
 
     private var favoriteGameIDsBinding: Binding<Set<String>> {

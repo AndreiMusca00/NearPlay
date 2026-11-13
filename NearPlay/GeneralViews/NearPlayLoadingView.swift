@@ -21,7 +21,7 @@ struct NearPlayLoadingView: View {
 
             VStack(spacing: 24) {
                 ZStack {
-                    Circle()
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
                         .stroke(
                             LinearGradient(
                                 colors: [
@@ -33,43 +33,19 @@ struct NearPlayLoadingView: View {
                             ),
                             lineWidth: 2
                         )
-                        .frame(width: 92, height: 92)
-                        .scaleEffect(pulse ? 1.14 : 0.92)
+                        .frame(width: 112, height: 112)
+                        .scaleEffect(pulse ? 1.10 : 0.94)
                         .opacity(pulse ? 0.08 : 0.38)
 
-                    Circle()
-                        .fill(Color.white.opacity(0.045))
-                        .frame(width: 78, height: 78)
+                    Image("NearPlayLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 96, height: 96)
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                         .overlay {
-                            Circle()
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
                                 .stroke(Color.white.opacity(0.10), lineWidth: 1)
                         }
-
-                    Image(systemName: "gamecontroller.fill")
-                        .font(.system(size: 34, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color(
-                                        red: 0.05,
-                                        green: 0.72,
-                                        blue: 1.00
-                                    ),
-                                    Color(
-                                        red: 0.45,
-                                        green: 0.38,
-                                        blue: 1.00
-                                    ),
-                                    Color(
-                                        red: 0.66,
-                                        green: 0.25,
-                                        blue: 1.00
-                                    )
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
                 }
                 .scaleEffect(contentVisible ? 1.0 : 0.86)
                 .opacity(contentVisible ? 1.0 : 0.0)

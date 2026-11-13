@@ -222,18 +222,7 @@ struct TapFrenzyView: View {
         color: Color
     ) -> some View {
         VStack(spacing: 7) {
-            HStack(spacing: 6) {
-                Circle().fill(color).frame(width: 8, height: 8)
-                    .shadow(color: color, radius: 5)
-                Text(name)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Spacer()
-                Text(label)
-                    .font(.system(size: 8, weight: .black, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.34))
-            }
+            PlayerCardHeading(name: name, badge: label, color: color, fontSize: 12)
 
             HStack(alignment: .firstTextBaseline) {
                 Text("\(progress.score)")

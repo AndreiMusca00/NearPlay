@@ -213,7 +213,7 @@ private struct GameTutorialDescriptor {
                     GameTutorialPage(
                         title: "Roll the dice",
                         subtitle:
-                            "Tap the dice button in the middle of the board. Each die gives one move. A double gives four moves of the same value.",
+                            "Tap the dice button in the middle of the board. Each dice gives one move. A double gives four moves of the same value.",
                         artwork: .backgammon(0)
                     ),
                     GameTutorialPage(

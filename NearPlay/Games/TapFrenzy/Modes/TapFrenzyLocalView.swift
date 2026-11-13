@@ -620,6 +620,7 @@ struct TapFrenzyLocalView: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Text("\(result?.completedSequences ?? 0) sequences · \(result?.mistakes ?? 0) mistakes")
                     .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.40))

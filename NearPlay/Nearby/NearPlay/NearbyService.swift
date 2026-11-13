@@ -57,9 +57,7 @@ final class NearbyService: ObservableObject {
     ) {
         stop()
 
-        let safeName = playerName.isEmpty
-            ? "Player"
-            : playerName
+        let safeName = PlayerProfile.displayName(for: playerName)
 
         currentGameID = gameID
         currentPlayerName = safeName
@@ -410,18 +408,30 @@ extension NearbyService: NearbyTransportDelegate {
                 return
             }
 
-            let alreadyDiscovered =
-                self.discoveredPeers.contains {
-                    $0.id == peer.id
-                }
-
             let alreadyConnected =
                 self.connectedPeers.contains {
                     $0.id == peer.id
                 }
 
-            guard !alreadyDiscovered,
-                  !alreadyConnected else {
+            guard !alreadyConnected else {
+                return
+            }
+
+            if let index = self.discoveredPeers.firstIndex(where: { $0.id == peer.id }) {
+                guard self.discoveredPeers[index] != peer else { return }
+                self.discoveredPeers[index] = peer
+                if self.connectingPeer?.id == peer.id {
+                    self.connectingPeer = peer
+                }
+                if let outgoing = self.outgoingInvitation, outgoing.toPeer.id == peer.id {
+                    self.outgoingInvitation = NearbyOutgoingInvitation(
+                        id: outgoing.id,
+                        toPeer: peer,
+                        context: outgoing.context,
+                        sentAt: outgoing.sentAt,
+                        expiresAt: outgoing.expiresAt
+                    )
+                }
                 return
             }
 
