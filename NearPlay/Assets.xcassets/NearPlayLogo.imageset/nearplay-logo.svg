@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="678" height="597" viewBox="172 205 678 597">
+  <title>NearPlay N monogram</title>
+  <desc>The three original app icon vector layers, without the icon background.</desc>
+  <defs>
+    <linearGradient id="right" x1="735" y1="213" x2="735" y2="794" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25F4DE" />
+      <stop offset="1" stop-color="#258BFF" />
+    </linearGradient>
+    <linearGradient id="left" x1="282" y1="217" x2="282" y2="794" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#23DFF5" />
+      <stop offset=".43" stop-color="#3C74FF" />
+      <stop offset=".513" stop-color="#5160FE" />
+      <stop offset=".74" stop-color="#A242FC" />
+      <stop offset="1" stop-color="#F23CF2" />
+    </linearGradient>
+    <linearGradient id="diagonal" x1="512" y1="217" x2="512" y2="794" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#23DFF5" />
+      <stop offset=".43" stop-color="#3C74FF" />
+      <stop offset=".513" stop-color="#5160FE" />
+      <stop offset="1" stop-color="#8E2FF7" />
+    </linearGradient>
+  </defs>
+  <path fill="url(#right)" d="M626 322C626 262 674 213 735 213C795 213 842 261 842 322V668L626 459Z" />
+  <path fill="url(#left)" d="M180 355C180 277 241 217 317 217C341 217 364 222 385 233V347H354V313C354 299 343 289 329 289C315 289 303 299 303 313V347H267C253 347 242 359 242 373C242 387 254 398 267 398H303V432C303 446 315 457 329 457C343 457 354 446 354 432V398H385V680C385 742 339 792 282 792C225 792 180 746 180 680Z" />
+  <path fill="url(#diagonal)" d="M385 233C399 240 411 250 422 261L842 667C842 736 796 794 733 794C698 794 670 779 646 755L385 513V398H389C403 398 414 387 414 373C414 359 403 347 389 347H385Z" />
+</svg>

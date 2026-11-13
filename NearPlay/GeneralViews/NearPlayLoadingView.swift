@@ -20,35 +20,19 @@ struct NearPlayLoadingView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 24) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.cyan.opacity(0.42),
-                                    Color.purple.opacity(0.34)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2
-                        )
-                        .frame(width: 112, height: 112)
-                        .scaleEffect(pulse ? 1.10 : 0.94)
-                        .opacity(pulse ? 0.08 : 0.38)
-
-                    Image("NearPlayLogo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 96, height: 96)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                        }
-                }
-                .scaleEffect(contentVisible ? 1.0 : 0.86)
-                .opacity(contentVisible ? 1.0 : 0.0)
+                Image("NearPlayLogo")
+                    .resizable()
+                    .renderingMode(.original)
+                    .scaledToFit()
+                    .frame(width: 108, height: 96)
+                    .shadow(
+                        color: Color.cyan.opacity(pulse ? 0.18 : 0.08),
+                        radius: pulse ? 18 : 10
+                    )
+                    .scaleEffect(pulse ? 1.025 : 0.98)
+                    .frame(width: 112, height: 112)
+                    .scaleEffect(contentVisible ? 1.0 : 0.86)
+                    .opacity(contentVisible ? 1.0 : 0.0)
 
                 VStack(spacing: 10) {
                     Text("NearPlay")
